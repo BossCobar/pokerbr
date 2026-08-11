@@ -4,7 +4,12 @@
       "WebSearch",
       "WebFetch(domain:supremagaming.com.br)",
       "Read(//mnt/c/cursor/**)",
-      "Bash(npx create-next-app@latest . --typescript --tailwind --eslint --app --src-dir --import-alias \"@/*\" --yes)"
+      "Bash(npx create-next-app@latest . --typescript --tailwind --eslint --app --src-dir --import-alias \"@/*\" --yes)",
+      "PowerShell(Get-ChildItem \"C:\\\\cursor\\\\poker\" -Force | Where-Object { $_.Name -notmatch \"node_modules|\\\\.next\" } | Select-Object Mode, Name)",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(npx vitest *)",
+      "Skill(update-config)"
     ]
   }
 }
