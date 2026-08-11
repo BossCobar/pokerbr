@@ -60,10 +60,10 @@ export function PlayerSeat({ player, seatIndex, totalSeats, myCards, isMyTurn, m
         {!isSeated && (
           <button
             onClick={() => onSit(seatIndex)}
-            className="w-16 h-14 rounded-xl border-2 border-dashed border-gray-700 text-gray-600 text-xs hover:border-[#c8a84b] hover:text-[#c8a84b] transition-all flex flex-col items-center justify-center bg-black/30 hover:bg-[#c8a84b]/5"
+            className="w-12 h-10 sm:w-16 sm:h-14 rounded-xl border-2 border-dashed border-gray-700 text-gray-600 text-xs hover:border-[#c8a84b] hover:text-[#c8a84b] active:border-[#c8a84b] active:text-[#c8a84b] transition-all flex flex-col items-center justify-center bg-black/30 hover:bg-[#c8a84b]/5 touch-manipulation"
           >
-            <span className="text-lg leading-none">+</span>
-            <span className="text-[10px]">Sentar</span>
+            <span className="text-base sm:text-lg leading-none">+</span>
+            <span className="text-[9px] sm:text-[10px]">Sentar</span>
           </button>
         )}
       </div>
@@ -83,42 +83,43 @@ export function PlayerSeat({ player, seatIndex, totalSeats, myCards, isMyTurn, m
           boxShadow: ['0 0 0px rgba(251,191,36,0)', '0 0 16px rgba(251,191,36,0.8)', '0 0 0px rgba(251,191,36,0)'],
         } : { boxShadow: '0 0 0px rgba(0,0,0,0)' }}
         transition={{ duration: 1.2, repeat: Infinity }}
-        className={`border-2 rounded-xl p-2 text-center bg-black/80 backdrop-blur-sm ${borderClass} min-w-[88px] max-w-[100px]`}
+        className={`border-2 rounded-xl p-1 sm:p-2 text-center bg-black/80 backdrop-blur-sm ${borderClass}`}
+        style={{ minWidth: '72px', maxWidth: '92px' }}
       >
         {/* Badges row */}
-        <div className="flex justify-center gap-0.5 mb-0.5 text-[9px] font-bold">
-          {player.isDealer && <span className="bg-white text-black rounded px-1">D</span>}
-          {player.isSB && <span className="bg-blue-500 text-white rounded px-1">SB</span>}
-          {player.isBB && <span className="bg-red-500 text-white rounded px-1">BB</span>}
-          {isMe && <span className="bg-[#c8a84b] text-black rounded px-1">Você</span>}
+        <div className="flex justify-center gap-0.5 mb-0.5 text-[8px] sm:text-[9px] font-bold">
+          {player.isDealer && <span className="bg-white text-black rounded px-0.5 sm:px-1">D</span>}
+          {player.isSB && <span className="bg-blue-500 text-white rounded px-0.5 sm:px-1">SB</span>}
+          {player.isBB && <span className="bg-red-500 text-white rounded px-0.5 sm:px-1">BB</span>}
+          {isMe && <span className="bg-[#c8a84b] text-black rounded px-0.5 sm:px-1">Você</span>}
         </div>
 
         {/* Name */}
-        <div className="text-white text-xs font-bold truncate leading-tight px-1">
+        <div className="text-white text-[10px] sm:text-xs font-bold truncate leading-tight px-0.5">
           {player.nickname}
         </div>
 
         {/* Chips */}
-        <div className="text-[#c8a84b] text-xs font-semibold mt-0.5">
+        <div className="text-[#c8a84b] text-[10px] sm:text-xs font-semibold mt-0.5">
           {player.chips.toLocaleString('pt-BR')}
         </div>
 
         {/* Current bet */}
         {player.bet > 0 && (
-          <div className="text-yellow-300 text-[10px] font-medium">
+          <div className="text-yellow-300 text-[9px] sm:text-[10px] font-medium">
             🪙 {player.bet.toLocaleString('pt-BR')}
           </div>
         )}
 
         {/* Status */}
         {statusText[player.status] && (
-          <div className={`text-[9px] font-bold mt-0.5 ${player.status === 'allin' ? 'text-yellow-400' : player.status === 'folded' ? 'text-red-500' : 'text-gray-400'}`}>
+          <div className={`text-[8px] sm:text-[9px] font-bold mt-0.5 ${player.status === 'allin' ? 'text-yellow-400' : player.status === 'folded' ? 'text-red-500' : 'text-gray-400'}`}>
             {statusText[player.status]}
           </div>
         )}
 
         {/* Cards */}
-        <div className="flex gap-0.5 justify-center mt-1">
+        <div className="flex gap-0.5 justify-center mt-0.5 sm:mt-1">
           {isMe && cards.length > 0
             ? cards.map((c, i) => <Card key={c} card={c} delay={i * 0.12} size="sm" />)
             : player.status !== 'waiting' && player.status !== 'spectating' && !isMe && player.holeCards.length > 0

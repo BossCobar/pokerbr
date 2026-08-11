@@ -70,10 +70,10 @@ export function HomeScreen() {
 
       <div className="w-full max-w-lg relative z-10">
         {/* Logo */}
-        <div className="text-center mb-8">
-          <div className="text-7xl mb-3 drop-shadow-2xl">🃏</div>
-          <h1 className="text-5xl font-black text-[#c8a84b] tracking-wider drop-shadow-lg">PokerBR</h1>
-          <p className="text-gray-500 text-sm mt-2 tracking-wide">Texas Hold&apos;em &amp; Cucurucho · Fichas Virtuais</p>
+        <div className="text-center mb-6 sm:mb-8">
+          <div className="text-5xl sm:text-7xl mb-2 sm:mb-3 drop-shadow-2xl">🃏</div>
+          <h1 className="text-4xl sm:text-5xl font-black text-[#c8a84b] tracking-wider drop-shadow-lg">PokerBR</h1>
+          <p className="text-gray-500 text-xs sm:text-sm mt-2 tracking-wide">Texas Hold&apos;em &amp; Cucurucho · Fichas Virtuais</p>
         </div>
 
         {/* Nickname (shared) */}

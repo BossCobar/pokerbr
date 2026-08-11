@@ -8,10 +8,32 @@
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
+html {
+  /* Prevent iOS bounce scroll on the root */
+  overscroll-behavior: none;
+  /* Safe area support for notched phones */
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+}
+
 body {
   background-color: var(--dark);
   color: white;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  /* Prevent pull-to-refresh on Android Chrome */
+  overscroll-behavior-y: none;
+  /* Disable tap highlight on mobile */
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Larger touch targets for interactive elements on mobile */
+button {
+  touch-action: manipulation;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+input[type="range"] {
+  touch-action: pan-x;
 }
 
 ::-webkit-scrollbar { width: 4px; }
