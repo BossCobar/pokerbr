@@ -1,5 +1,5 @@
 'use client';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { ActionTimer } from './ActionTimer';
 import type { ActionType } from '@/game/types';
 import { playSound } from '@/lib/sounds';
@@ -19,6 +19,10 @@ export function BettingControls({
   canCheck, callAmount, minRaise, myChips, pot, turnStartedAt, turnTimeLimit, onAction,
 }: Props) {
   const [raiseAmt, setRaiseAmt] = useState(minRaise);
+
+  useEffect(() => {
+    setRaiseAmt(prev => Math.max(prev, minRaise));
+  }, [minRaise]);
 
   function act(type: ActionType, amount?: number) {
     playSound(type === 'fold' ? 'fold' : type === 'check' ? 'check' : type === 'call' ? 'call' : 'raise');

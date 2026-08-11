@@ -10,6 +10,7 @@ export function generateCode(): string {
 export function createRoom(hostId: string, nickname: string, config: {
   bigBlind: number; startingChips: number; maxSeats: number;
   mode: GameMode; turnTimeLimit: number;
+  cucuruchoAnteMultiplier?: number; allowRebuy?: boolean; rebuyAmount?: number;
 }): GameSession {
   let code = generateCode();
   while (rooms.has(code)) code = generateCode();

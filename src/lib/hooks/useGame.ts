@@ -54,10 +54,12 @@ export function useGame() {
     socket.emit('chat-message', { text });
   }, []);
 
+  const requestRebuy = useCallback(() => socket.emit('request-rebuy'), []);
+
   return {
     ...store,
     createRoom, joinRoom, sitDown, leaveSeat, startGame,
-    sendAction, sendCucuruchoDecision, sendChat,
+    sendAction, sendCucuruchoDecision, sendChat, requestRebuy,
     myId: socket.id,
   };
 }

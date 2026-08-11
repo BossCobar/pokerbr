@@ -7,73 +7,121 @@ import type { Player, CardCode } from '@/game/types';
 interface Props {
   player: Player | null;
   seatIndex: number;
+  totalSeats: number;
   myCards: CardCode[];
   isMyTurn: boolean;
   myId: string;
+  isSeated: boolean;
   onSit: (seatIndex: number) => void;
 }
 
-const seatPositions = [
-  'bottom-4 left-1/2 -translate-x-1/2',
-  'bottom-16 right-8',
-  'top-1/2 right-4 -translate-y-1/2',
-  'top-16 right-8',
-  'top-4 right-1/3',
-  'top-4 left-1/2 -translate-x-1/2',
-  'top-4 left-1/3',
-  'top-16 left-8',
-  'top-1/2 left-4 -translate-y-1/2',
-  'bottom-16 left-8',
-];
+function getSeatStyle(index: number, total: number): React.CSSProperties {
+  // Ellipse: bottom center is seat 0, going clockwise
+  const startAngle = Math.PI / 2; // bottom
+  const angle = startAngle - (index / total) * 2 * Math.PI;
+  const rx = 42; // horizontal radius %
+  const ry = 38; // vertical radius %
+  const cx = 50;
+  const cy = 50;
+  const x = cx + rx * Math.cos(angle);
+  const y = cy - ry * Math.sin(angle);
+  return {
+    position: 'absolute',
+    left: `${x}%`,
+    top: `${y}%`,
+    transform: 'translate(-50%, -50%)',
+  };
+}
 
-const statusLabel: Record<string, string> = {
-  active: '', waiting: 'Aguardando', folded: 'Fold', allin: 'All-in', spectating: '', eliminated: 'Eliminado',
-};
-const statusColor: Record<string, string> = {
-  active: 'border-green-400', waiting: 'border-gray-500', folded: 'border-red-800 opacity-60',
-  allin: 'border-yellow-400', spectating: 'border-gray-700', eliminated: 'border-red-900 opacity-40',
+const statusBorder: Record<string, string> = {
+  active: 'border-green-500',
+  waiting: 'border-gray-600',
+  folded: 'border-red-900',
+  allin: 'border-yellow-400',
+  spectating: 'border-gray-800',
+  'sitting-out': 'border-gray-700',
 };
 
-export function PlayerSeat({ player, seatIndex, myCards, isMyTurn, myId, onSit }: Props) {
-  const pos = seatPositions[seatIndex] ?? 'top-0 left-0';
+const statusText: Record<string, string> = {
+  waiting: 'Aguardando',
+  folded: 'FOLD',
+  allin: 'ALL-IN',
+  'sitting-out': 'Ausente',
+};
+
+export function PlayerSeat({ player, seatIndex, totalSeats, myCards, isMyTurn, myId, isSeated, onSit }: Props) {
+  const style = getSeatStyle(seatIndex, totalSeats);
   const isMe = player?.id === myId;
   const cards = isMe ? myCards : [];
 
   if (!player) {
     return (
-      <div className={`absolute ${pos} z-20`}>
-        <button
-          onClick={() => onSit(seatIndex)}
-          className="w-20 h-16 rounded-xl border-2 border-dashed border-gray-600 text-gray-500 text-xs hover:border-green-500 hover:text-green-400 transition-colors flex flex-col items-center justify-center"
-        >
-          <span>+</span>
-          <span>Sentar</span>
-        </button>
+      <div style={style} className="z-20">
+        {!isSeated && (
+          <button
+            onClick={() => onSit(seatIndex)}
+            className="w-16 h-14 rounded-xl border-2 border-dashed border-gray-700 text-gray-600 text-xs hover:border-[#c8a84b] hover:text-[#c8a84b] transition-all flex flex-col items-center justify-center bg-black/30 hover:bg-[#c8a84b]/5"
+          >
+            <span className="text-lg leading-none">+</span>
+            <span className="text-[10px]">Sentar</span>
+          </button>
+        )}
       </div>
     );
   }
 
+  const borderClass = isMyTurn
+    ? 'border-[#c8a84b]'
+    : (statusBorder[player.status] ?? 'border-gray-600');
+
+  const opacity = player.status === 'folded' ? 'opacity-50' : '';
+
   return (
-    <div className={`absolute ${pos} z-20`}>
+    <div style={style} className={`z-20 ${opacity}`}>
       <motion.div
-        animate={isMyTurn ? { boxShadow: ['0 0 0px #fbbf24', '0 0 20px #fbbf24', '0 0 0px #fbbf24'] } : {}}
-        transition={{ duration: 1, repeat: Infinity }}
-        className={`border-2 rounded-xl p-2 min-w-[80px] text-center ${statusColor[player.status] ?? 'border-gray-600'} bg-black/70`}
+        animate={isMyTurn ? {
+          boxShadow: ['0 0 0px rgba(251,191,36,0)', '0 0 16px rgba(251,191,36,0.8)', '0 0 0px rgba(251,191,36,0)'],
+        } : { boxShadow: '0 0 0px rgba(0,0,0,0)' }}
+        transition={{ duration: 1.2, repeat: Infinity }}
+        className={`border-2 rounded-xl p-2 text-center bg-black/80 backdrop-blur-sm ${borderClass} min-w-[88px] max-w-[100px]`}
       >
-        <div className="text-xs font-bold text-white truncate max-w-[80px]">
-          {player.nickname} {player.isDealer ? '🎯' : ''}{player.isSB ? 'SB' : ''}{player.isBB ? 'BB' : ''}
+        {/* Badges row */}
+        <div className="flex justify-center gap-0.5 mb-0.5 text-[9px] font-bold">
+          {player.isDealer && <span className="bg-white text-black rounded px-1">D</span>}
+          {player.isSB && <span className="bg-blue-500 text-white rounded px-1">SB</span>}
+          {player.isBB && <span className="bg-red-500 text-white rounded px-1">BB</span>}
+          {isMe && <span className="bg-[#c8a84b] text-black rounded px-1">Você</span>}
         </div>
-        <div className="text-[#c8a84b] text-xs font-semibold">{player.chips.toLocaleString('pt-BR')}</div>
+
+        {/* Name */}
+        <div className="text-white text-xs font-bold truncate leading-tight px-1">
+          {player.nickname}
+        </div>
+
+        {/* Chips */}
+        <div className="text-[#c8a84b] text-xs font-semibold mt-0.5">
+          {player.chips.toLocaleString('pt-BR')}
+        </div>
+
+        {/* Current bet */}
         {player.bet > 0 && (
-          <div className="text-yellow-300 text-xs">Aposta: {player.bet.toLocaleString('pt-BR')}</div>
+          <div className="text-yellow-300 text-[10px] font-medium">
+            🪙 {player.bet.toLocaleString('pt-BR')}
+          </div>
         )}
-        {statusLabel[player.status] && (
-          <div className="text-gray-400 text-xs">{statusLabel[player.status]}</div>
+
+        {/* Status */}
+        {statusText[player.status] && (
+          <div className={`text-[9px] font-bold mt-0.5 ${player.status === 'allin' ? 'text-yellow-400' : player.status === 'folded' ? 'text-red-500' : 'text-gray-400'}`}>
+            {statusText[player.status]}
+          </div>
         )}
-        <div className="flex gap-1 justify-center mt-1">
-          {isMe
-            ? cards.map((c, i) => <Card key={c} card={c} delay={i * 0.1} size="sm" />)
-            : player.holeCards.length > 0
+
+        {/* Cards */}
+        <div className="flex gap-0.5 justify-center mt-1">
+          {isMe && cards.length > 0
+            ? cards.map((c, i) => <Card key={c} card={c} delay={i * 0.12} size="sm" />)
+            : player.status !== 'waiting' && player.status !== 'spectating' && !isMe && player.holeCards.length > 0
               ? [0, 1].map(i => <CardBack key={i} size="sm" />)
               : null
           }

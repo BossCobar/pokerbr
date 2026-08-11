@@ -1,5 +1,5 @@
 import { EventEmitter } from 'events';
-import type { RoomState, Player, GameState, GameMode, HandResult, ActionType, ChatMessage } from '@/game/types';
+import type { RoomState, RoomConfig, Player, GameState, GameMode, HandResult, ActionType, ChatMessage } from '@/game/types';
 import {
   createInitialGameState, getSeatedPlayers, postBlinds,
   dealHoleCards, dealCommunityCards, collectBetsIntoPot,
@@ -18,6 +18,7 @@ export class GameSession extends EventEmitter {
   game: GameState;
   chatMessages: ChatMessage[] = [];
   maxSeats: number;
+  config: RoomConfig;
   private deck: string[] = [];
   private currentBet = 0;
   private lastAggressorIndex = 0;
@@ -26,11 +27,23 @@ export class GameSession extends EventEmitter {
   constructor(code: string, hostId: string, config: {
     bigBlind: number; startingChips: number; maxSeats: number;
     mode: GameMode; turnTimeLimit: number;
+    cucuruchoAnteMultiplier?: number; allowRebuy?: boolean; rebuyAmount?: number;
   }) {
     super();
     this.code = code;
     this.hostId = hostId;
     this.maxSeats = config.maxSeats;
+    this.config = {
+      bigBlind: config.bigBlind,
+      smallBlind: config.bigBlind / 2,
+      startingChips: config.startingChips,
+      maxSeats: config.maxSeats,
+      mode: config.mode,
+      turnTimeLimit: config.turnTimeLimit,
+      cucuruchoAnteMultiplier: config.cucuruchoAnteMultiplier ?? 10,
+      allowRebuy: config.allowRebuy ?? false,
+      rebuyAmount: config.rebuyAmount ?? config.startingChips,
+    };
     this.game = createInitialGameState(config);
   }
 
@@ -42,6 +55,17 @@ export class GameSession extends EventEmitter {
       game: this.game,
       chatMessages: this.chatMessages,
       maxSeats: this.maxSeats,
+      config: {
+        bigBlind: this.game.bigBlind,
+        smallBlind: this.game.smallBlind,
+        startingChips: this.game.startingChips,
+        maxSeats: this.maxSeats,
+        mode: this.game.mode,
+        turnTimeLimit: this.game.turnTimeLimit,
+        cucuruchoAnteMultiplier: this.config.cucuruchoAnteMultiplier,
+        allowRebuy: this.config.allowRebuy,
+        rebuyAmount: this.config.rebuyAmount,
+      },
     };
   }
 
@@ -146,7 +170,7 @@ export class GameSession extends EventEmitter {
 
     // Cucurucho check
     if (isCucuruchoHand(this.game)) {
-      const anteAmount = cucuruchoAnteAmount(this.game.bigBlind);
+      const anteAmount = this.game.bigBlind * this.config.cucuruchoAnteMultiplier;
       const { players: withAntes, totalAnte } = applyCucuruchoAntes(seated, anteAmount);
       withAntes.forEach(p => { const orig = this.players.find(o => o.id === p.id); if (orig) Object.assign(orig, p); });
       this.game.pot += totalAnte;
@@ -158,6 +182,7 @@ export class GameSession extends EventEmitter {
     withBlinds.forEach(p => { const orig = this.players.find(o => o.id === p.id); if (orig) Object.assign(orig, p); });
 
     this.currentBet = this.game.bigBlind;
+    this.game.currentBet = this.currentBet;
     this.lastAggressorIndex = bbIdx;
 
     // Deal hole cards
@@ -204,6 +229,7 @@ export class GameSession extends EventEmitter {
       currentPlayer.totalBet += actual;
       if (currentPlayer.chips === 0) currentPlayer.status = 'allin';
       this.currentBet = currentPlayer.bet;
+      this.game.currentBet = this.currentBet;
       this.game.minRaise = this.currentBet + (raiseTotal - this.currentBet);
       this.lastAggressorIndex = this.game.currentPlayerIndex;
       currentPlayer.stats.vpipHands++;
@@ -215,6 +241,7 @@ export class GameSession extends EventEmitter {
       currentPlayer.status = 'allin';
       if (currentPlayer.bet > this.currentBet) {
         this.currentBet = currentPlayer.bet;
+        this.game.currentBet = this.currentBet;
         this.lastAggressorIndex = this.game.currentPlayerIndex;
       }
     }
@@ -250,6 +277,7 @@ export class GameSession extends EventEmitter {
     reset.forEach(p => { const orig = this.players.find(o => o.id === p.id); if (orig) Object.assign(orig, p); });
     this.game.pot = pot;
     this.currentBet = 0;
+    this.game.currentBet = 0;
     this.game.minRaise = this.game.bigBlind;
 
     const next: Record<string, string> = { preflop: 'flop', flop: 'turn', turn: 'river', river: 'showdown' };
@@ -380,6 +408,16 @@ export class GameSession extends EventEmitter {
     this.game.phase = 'waiting';
     this.emit('state-updated');
     if (this.canStart()) setTimeout(() => this.startHand(), 2000);
+  }
+
+  requestRebuy(playerId: string): boolean {
+    if (!this.config.allowRebuy) return false;
+    const player = this.players.find(p => p.id === playerId);
+    if (!player) return false;
+    if (player.chips > 0 && player.seatIndex !== null) return false;
+    player.chips = this.config.rebuyAmount || this.game.startingChips;
+    player.status = 'waiting';
+    return true;
   }
 
   private startTurnTimer(): void {

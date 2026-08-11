@@ -24,6 +24,7 @@ export function createInitialGameState(config: GameConfig): GameState {
     cucuruchoPotSnapshot: 0,
     street: 'preflop',
     minRaise: config.bigBlind * 2,
+    currentBet: 0,
     bigBlind: config.bigBlind,
     smallBlind: config.bigBlind / 2,
     startingChips: config.startingChips,

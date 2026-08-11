@@ -12,13 +12,12 @@ export default function RoomPage() {
   const {
     roomState, myCards, nickname, roomCode,
     cucuruchoPayInActive, cucuruchoPayInAmount,
-    joinRoom, sitDown, startGame, sendAction,
-    sendCucuruchoDecision, sendChat, myId,
+    joinRoom, sitDown, leaveSeat, startGame, sendAction,
+    sendCucuruchoDecision, sendChat, requestRebuy, myId,
   } = useGame();
 
   useEffect(() => {
     if (!nickname) {
-      // Redirect to home to enter nickname
       router.push(`/?join=${code}`);
       return;
     }
@@ -29,7 +28,7 @@ export default function RoomPage() {
 
   if (!roomState) {
     return (
-      <div className="min-h-screen bg-[#0d1117] flex items-center justify-center">
+      <div className="min-h-screen bg-[#0a0f1a] flex items-center justify-center">
         <div className="text-[#c8a84b] text-xl font-bold animate-pulse">Conectando à sala...</div>
       </div>
     );
@@ -44,9 +43,11 @@ export default function RoomPage() {
       cucuruchoPayInAmount={cucuruchoPayInAmount}
       onAction={sendAction}
       onSitDown={sitDown}
+      onLeaveSeat={leaveSeat}
       onStartGame={startGame}
       onSendChat={sendChat}
       onCucuruchoDecision={sendCucuruchoDecision}
+      onRequestRebuy={requestRebuy}
     />
   );
 }

@@ -74,6 +74,7 @@ export interface GameState {
   cucuruchoPotSnapshot: number; // pot at flop reveal for cucurucho pay-in
   street: Street;
   minRaise: number;
+  currentBet: number;
   bigBlind: number;
   smallBlind: number;
   startingChips: number;
@@ -84,6 +85,18 @@ export interface GameState {
   turnStartedAt: number; // Date.now()
 }
 
+export interface RoomConfig {
+  bigBlind: number;
+  smallBlind: number;
+  startingChips: number;
+  maxSeats: number;
+  mode: GameMode;
+  turnTimeLimit: number;
+  cucuruchoAnteMultiplier: number;
+  allowRebuy: boolean;
+  rebuyAmount: number;
+}
+
 export interface RoomState {
   code: string;
   hostId: string;
@@ -91,6 +104,7 @@ export interface RoomState {
   game: GameState | null;
   chatMessages: ChatMessage[];
   maxSeats: number;
+  config: RoomConfig;
 }
 
 export interface ChatMessage {
@@ -113,4 +127,7 @@ export interface CreateRoomPayload {
   maxSeats: number;
   mode: GameMode;
   turnTimeLimit: number;
+  cucuruchoAnteMultiplier?: number;
+  allowRebuy?: boolean;
+  rebuyAmount?: number;
 }

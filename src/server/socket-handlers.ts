@@ -34,6 +34,9 @@ export function setupSocketHandlers(io: Server): void {
         maxSeats: payload.maxSeats ?? 9,
         mode: payload.mode ?? 'holdem',
         turnTimeLimit: payload.turnTimeLimit ?? 30,
+        cucuruchoAnteMultiplier: payload.cucuruchoAnteMultiplier ?? 10,
+        allowRebuy: payload.allowRebuy ?? false,
+        rebuyAmount: payload.rebuyAmount ?? payload.startingChips ?? 1000,
       });
       socket.join(session.code);
       socket.join(playerId);
@@ -89,6 +92,13 @@ export function setupSocketHandlers(io: Server): void {
       if (!session) return;
       const msg = session.addChatMessage(playerId, payload.text);
       io.to(session.code).emit('chat-message', msg);
+    });
+
+    socket.on('request-rebuy', () => {
+      const session = getRoomByPlayerId(playerId);
+      if (!session) return;
+      const ok = session.requestRebuy(playerId);
+      if (ok) emitRoomState(session.code);
     });
 
     socket.on('disconnect', () => {
