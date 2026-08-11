@@ -7,7 +7,7 @@ export function getSocket(): Socket {
     const url = process.env.NEXT_PUBLIC_SOCKET_URL ??
       (typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000');
     socket = io(url, {
-      transports: ['websocket', 'polling'],
+      transports: ['websocket'],
     });
   }
   return socket;
