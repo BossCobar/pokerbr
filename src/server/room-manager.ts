@@ -34,3 +34,7 @@ export function getRoomByPlayerId(playerId: string): GameSession | undefined {
   }
   return undefined;
 }
+
+export function clearRooms(): void {
+  rooms.clear();
+}

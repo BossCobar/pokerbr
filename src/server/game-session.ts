@@ -1,5 +1,5 @@
 import { EventEmitter } from 'events';
-import type { RoomState, RoomConfig, Player, GameState, GameMode, HandResult, ActionType, ChatMessage } from '@/game/types';
+import type { RoomState, RoomConfig, Player, GameState, GameMode, ActionType, ChatMessage } from '@/game/types';
 import {
   createInitialGameState, getSeatedPlayers, postBlinds,
   dealHoleCards, dealCommunityCards, collectBetsIntoPot,
@@ -7,7 +7,7 @@ import {
 } from '@/game/holdem';
 import { createDeck, shuffle } from '@/game/deck';
 import {
-  isCucuruchoHand, applyCucuruchoAntes, cucuruchoAnteAmount,
+  isCucuruchoHand, applyCucuruchoAntes,
   advanceCucuruchoButton, getCucuruchoPayInAmount,
 } from '@/game/cucurucho';
 
@@ -21,8 +21,10 @@ export class GameSession extends EventEmitter {
   config: RoomConfig;
   private deck: string[] = [];
   private currentBet = 0;
-  private lastAggressorIndex = 0;
   private turnTimer: ReturnType<typeof setTimeout> | null = null;
+  // Tracks which active players have voluntarily acted this betting round.
+  // Reset on each new street and when a raise reopens betting.
+  private playersActedThisRound = new Set<string>();
 
   constructor(code: string, hostId: string, config: {
     bigBlind: number; startingChips: number; maxSeats: number;
@@ -149,6 +151,7 @@ export class GameSession extends EventEmitter {
       actionHistory: [],
       lastResult: null,
       cucuruchoActive: false,
+      currentBet: 0,
     };
 
     this.players = this.players.map(p => ({
@@ -162,9 +165,20 @@ export class GameSession extends EventEmitter {
     if (seated.length < 2) return;
 
     const dealerIdx = this.game.dealerIndex % seated.length;
-    const sbIdx = (dealerIdx + 1) % seated.length;
-    const bbIdx = (dealerIdx + 2) % seated.length;
-    const utg = seated.length > 2 ? (bbIdx + 1) % seated.length : dealerIdx;
+
+    // Heads-up: dealer = SB (standard poker rules)
+    let sbIdx: number;
+    let bbIdx: number;
+    if (seated.length === 2) {
+      sbIdx = dealerIdx;
+      bbIdx = (dealerIdx + 1) % 2;
+    } else {
+      sbIdx = (dealerIdx + 1) % seated.length;
+      bbIdx = (dealerIdx + 2) % seated.length;
+    }
+
+    // Preflop: for heads-up, dealer/SB acts first. For 3+, UTG (left of BB) acts first.
+    const utg = seated.length === 2 ? dealerIdx : (bbIdx + 1) % seated.length;
 
     seated[dealerIdx].isDealer = true;
 
@@ -183,7 +197,6 @@ export class GameSession extends EventEmitter {
 
     this.currentBet = this.game.bigBlind;
     this.game.currentBet = this.currentBet;
-    this.lastAggressorIndex = bbIdx;
 
     // Deal hole cards
     this.deck = shuffle(createDeck());
@@ -196,6 +209,10 @@ export class GameSession extends EventEmitter {
     this.game.street = 'preflop';
     this.game.phase = 'preflop';
     this.game.turnStartedAt = Date.now();
+    this.game.minRaise = this.game.bigBlind * 2;
+
+    // Nobody has voluntarily acted yet (blind posts don't count)
+    this.playersActedThisRound = new Set();
 
     this.emit('state-updated');
     this.startTurnTimer();
@@ -211,8 +228,9 @@ export class GameSession extends EventEmitter {
 
     if (type === 'fold') {
       currentPlayer.status = 'folded';
+      this.playersActedThisRound.add(playerId);
     } else if (type === 'check') {
-      // no-op
+      this.playersActedThisRound.add(playerId);
     } else if (type === 'call') {
       const callAmt = getCallAmount(currentPlayer, this.currentBet);
       currentPlayer.chips -= callAmt;
@@ -220,6 +238,7 @@ export class GameSession extends EventEmitter {
       currentPlayer.totalBet += callAmt;
       if (currentPlayer.chips === 0) currentPlayer.status = 'allin';
       currentPlayer.stats.vpipHands++;
+      this.playersActedThisRound.add(playerId);
     } else if (type === 'raise') {
       const raiseTotal = amount ?? this.currentBet * 2;
       const diff = raiseTotal - currentPlayer.bet;
@@ -230,9 +249,10 @@ export class GameSession extends EventEmitter {
       if (currentPlayer.chips === 0) currentPlayer.status = 'allin';
       this.currentBet = currentPlayer.bet;
       this.game.currentBet = this.currentBet;
-      this.game.minRaise = this.currentBet + (raiseTotal - this.currentBet);
-      this.lastAggressorIndex = this.game.currentPlayerIndex;
+      this.game.minRaise = this.currentBet * 2;
       currentPlayer.stats.vpipHands++;
+      // Raise reopens betting: everyone else must act again
+      this.playersActedThisRound = new Set([playerId]);
     } else if (type === 'allin') {
       const allInAmt = currentPlayer.chips;
       currentPlayer.bet += allInAmt;
@@ -242,7 +262,10 @@ export class GameSession extends EventEmitter {
       if (currentPlayer.bet > this.currentBet) {
         this.currentBet = currentPlayer.bet;
         this.game.currentBet = this.currentBet;
-        this.lastAggressorIndex = this.game.currentPlayerIndex;
+        // All-in raise reopens betting
+        this.playersActedThisRound = new Set([playerId]);
+      } else {
+        this.playersActedThisRound.add(playerId);
       }
     }
 
@@ -254,39 +277,54 @@ export class GameSession extends EventEmitter {
     const active = seated.filter(p => p.status === 'active');
     const stillIn = seated.filter(p => p.status === 'active' || p.status === 'allin');
 
-    if (stillIn.length <= 1 || active.length === 0) {
+    // Hand over if only one player remains
+    if (stillIn.length <= 1) {
       this.resolveSingleWinner();
       return;
     }
 
-    const nextIdx = getNextActiveIndex(seated, this.game.currentPlayerIndex);
+    // Betting round complete when all active players matched the bet AND all acted
     const allCalled = active.every(p => p.bet >= this.currentBet || p.chips === 0);
+    const allActed = active.every(p => this.playersActedThisRound.has(p.id));
 
-    if (allCalled && (nextIdx === this.lastAggressorIndex || nextIdx === -1)) {
+    if (allCalled && allActed) {
       this.advanceStreet(seated);
-    } else {
-      this.game.currentPlayerIndex = nextIdx === -1 ? 0 : nextIdx;
-      this.game.turnStartedAt = Date.now();
-      this.emit('state-updated');
-      this.startTurnTimer();
+      return;
     }
+
+    // Find next active player
+    const nextIdx = getNextActiveIndex(seated, this.game.currentPlayerIndex);
+    if (nextIdx === -1) {
+      // All remaining are all-in — advance without more betting
+      this.advanceStreet(seated);
+      return;
+    }
+
+    this.game.currentPlayerIndex = nextIdx;
+    this.game.turnStartedAt = Date.now();
+    this.emit('state-updated');
+    this.startTurnTimer();
   }
 
   private advanceStreet(seated: Player[]): void {
-    const { players: reset, pot } = collectBetsIntoPot(seated, this.game.pot);
-    reset.forEach(p => { const orig = this.players.find(o => o.id === p.id); if (orig) Object.assign(orig, p); });
+    // Collect all bets into pot (using this.players to catch all)
+    const { players: allReset, pot } = collectBetsIntoPot(this.players, this.game.pot);
+    this.players = allReset;
     this.game.pot = pot;
     this.currentBet = 0;
     this.game.currentBet = 0;
     this.game.minRaise = this.game.bigBlind;
+    this.playersActedThisRound = new Set();
 
-    const next: Record<string, string> = { preflop: 'flop', flop: 'turn', turn: 'river', river: 'showdown' };
-    const nextStreet = next[this.game.street];
+    const streets: Record<string, string> = { preflop: 'flop', flop: 'turn', turn: 'river', river: 'showdown' };
+    const nextStreet = streets[this.game.street];
 
     if (nextStreet === 'flop') {
       const { community, deck } = dealCommunityCards(3, [], this.deck);
-      this.game.communityCards = community; this.deck = deck;
-      this.game.street = 'flop'; this.game.phase = 'flop';
+      this.game.communityCards = community;
+      this.deck = deck;
+      this.game.street = 'flop';
+      this.game.phase = 'flop';
 
       if (this.game.cucuruchoActive) {
         this.game.cucuruchoPotSnapshot = this.game.pot;
@@ -296,23 +334,59 @@ export class GameSession extends EventEmitter {
       }
     } else if (nextStreet === 'turn') {
       const { community, deck } = dealCommunityCards(1, this.game.communityCards, this.deck);
-      this.game.communityCards = community; this.deck = deck;
-      this.game.street = 'turn'; this.game.phase = 'turn';
+      this.game.communityCards = community;
+      this.deck = deck;
+      this.game.street = 'turn';
+      this.game.phase = 'turn';
     } else if (nextStreet === 'river') {
       const { community, deck } = dealCommunityCards(1, this.game.communityCards, this.deck);
-      this.game.communityCards = community; this.deck = deck;
-      this.game.street = 'river'; this.game.phase = 'river';
+      this.game.communityCards = community;
+      this.deck = deck;
+      this.game.street = 'river';
+      this.game.phase = 'river';
     } else if (nextStreet === 'showdown') {
       this.resolveShowdown();
       return;
     }
 
     const seatedNow = getSeatedPlayers(this.players);
-    this.game.currentPlayerIndex = getNextActiveIndex(seatedNow, this.game.dealerIndex);
-    this.lastAggressorIndex = this.game.currentPlayerIndex;
+    const activePlayers = seatedNow.filter(p => p.status === 'active');
+
+    // All remaining players are all-in — run out remaining streets automatically
+    if (activePlayers.length === 0) {
+      this.emit('state-updated');
+      setTimeout(() => this.runOutBoard(), 800);
+      return;
+    }
+
+    const firstToAct = getNextActiveIndex(seatedNow, this.game.dealerIndex);
+    this.game.currentPlayerIndex = firstToAct === -1 ? 0 : firstToAct;
     this.game.turnStartedAt = Date.now();
     this.emit('state-updated');
     this.startTurnTimer();
+  }
+
+  private runOutBoard(): void {
+    const streetsLeft: Record<string, number> = { preflop: 3, flop: 1, turn: 1, river: 0 };
+    const count = streetsLeft[this.game.street];
+
+    if (count === undefined || this.game.street === 'river') {
+      this.resolveShowdown();
+      return;
+    }
+
+    if (count > 0) {
+      const { community, deck } = dealCommunityCards(count, this.game.communityCards, this.deck);
+      this.game.communityCards = community;
+      this.deck = deck;
+    }
+
+    const nextStreet: Record<string, string> = { preflop: 'flop', flop: 'turn', turn: 'river' };
+    const ns = nextStreet[this.game.street] as typeof this.game.street;
+    this.game.street = ns;
+    this.game.phase = ns;
+    this.emit('state-updated');
+    setTimeout(() => this.runOutBoard(), 800);
   }
 
   handleCucuruchoPayIn(playerId: string, payIn: boolean): void {
@@ -322,9 +396,8 @@ export class GameSession extends EventEmitter {
     if (payIn) {
       const amount = Math.min(getCucuruchoPayInAmount(this.game.cucuruchoPotSnapshot), player.chips);
       player.chips -= amount;
-      player.bet += amount;
+      player.bet += amount;   // tracked as street bet — collected later by collectBetsIntoPot
       player.totalBet += amount;
-      this.game.pot += amount;
       if (player.chips === 0) player.status = 'allin';
     } else {
       player.status = 'folded';
@@ -336,6 +409,11 @@ export class GameSession extends EventEmitter {
     );
 
     if (stillDeciding.length === 0) {
+      // Collect all cucurucho pay-in bets into pot (no double counting)
+      const { players: allReset, pot } = collectBetsIntoPot(this.players, this.game.pot);
+      this.players = allReset;
+      this.game.pot = pot;
+
       const { community: withTurn, deck: d1 } = dealCommunityCards(1, this.game.communityCards, this.deck);
       const { community: withRiver, deck: d2 } = dealCommunityCards(1, withTurn, d1);
       this.game.communityCards = withRiver;
@@ -347,23 +425,25 @@ export class GameSession extends EventEmitter {
   }
 
   private resolveSingleWinner(): void {
-    const seated = getSeatedPlayers(this.players);
-    const { players: reset, pot } = collectBetsIntoPot(this.players, this.game.pot);
-    this.players = reset;
+    const { players: allReset, pot } = collectBetsIntoPot(this.players, this.game.pot);
+    this.players = allReset;
     this.game.pot = pot;
 
+    const seated = getSeatedPlayers(this.players);
     const winner = seated.find(p => p.status === 'active') ?? seated.find(p => p.status === 'allin');
     if (!winner) { this.prepareNextHand(); return; }
 
+    const potWon = this.game.pot;
     const winnerPlayer = this.players.find(p => p.id === winner.id)!;
-    winnerPlayer.chips += this.game.pot;
+    winnerPlayer.chips += potWon;
     winnerPlayer.stats.handsWon++;
-    winnerPlayer.stats.totalWinnings += this.game.pot;
-    if (this.game.pot > winnerPlayer.stats.biggestPot) winnerPlayer.stats.biggestPot = this.game.pot;
+    winnerPlayer.stats.totalWinnings += potWon;
+    if (potWon > winnerPlayer.stats.biggestPot) winnerPlayer.stats.biggestPot = potWon;
 
+    this.game.pot = 0; // distributed — reset so totals balance
     this.game.lastResult = {
       winnerId: winner.id, winnerNickname: winner.nickname,
-      potWon: this.game.pot, handName: '', handCards: [], allHands: [],
+      potWon, handName: '', handCards: [], allHands: [],
     };
     this.game.phase = 'result';
     this.clearTurnTimer();
@@ -372,21 +452,23 @@ export class GameSession extends EventEmitter {
   }
 
   private resolveShowdown(): void {
-    const { players: reset, pot } = collectBetsIntoPot(this.players, this.game.pot);
-    this.players = reset;
+    const { players: allReset, pot } = collectBetsIntoPot(this.players, this.game.pot);
+    this.players = allReset;
     this.game.pot = pot;
 
     const result = determineWinners(this.players, this.game.communityCards);
+    const potWon = this.game.pot;
     const winner = this.players.find(p => p.id === result.winnerId)!;
-    winner.chips += this.game.pot;
+    winner.chips += potWon;
     winner.stats.handsWon++;
-    winner.stats.totalWinnings += this.game.pot;
-    if (this.game.pot > winner.stats.biggestPot) winner.stats.biggestPot = this.game.pot;
+    winner.stats.totalWinnings += potWon;
+    if (potWon > winner.stats.biggestPot) winner.stats.biggestPot = potWon;
 
     const seated = getSeatedPlayers(this.players);
     seated.forEach(p => { p.stats.handsPlayed++; });
 
-    this.game.lastResult = { ...result, potWon: this.game.pot };
+    this.game.pot = 0; // distributed — reset so totals balance
+    this.game.lastResult = { ...result, potWon };
     this.game.phase = 'result';
     this.clearTurnTimer();
     this.emit('state-updated');
