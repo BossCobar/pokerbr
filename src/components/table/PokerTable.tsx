@@ -58,7 +58,8 @@ export function PokerTable({
 
   const isMyTurn = useMemo(() => {
     if (!game) return false;
-    const sp = players.filter(p => p.seatIndex !== null && p.status !== 'spectating' && p.isConnected);
+    // Must match server's getSeatedPlayers: exclude spectating AND sitting-out
+    const sp = players.filter(p => p.seatIndex !== null && p.status !== 'spectating' && p.status !== 'sitting-out' && p.isConnected);
     return sp[game.currentPlayerIndex]?.id === myId;
   }, [game, players, myId]);
 

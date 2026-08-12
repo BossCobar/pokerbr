@@ -538,60 +538,57 @@ async function main() {
 
     // ── 9. Check for bust + test rebuy ───────────────────────────────────────
     log('\n9️⃣  Checking for bust and rebuy...');
-    // After all-in hands, someone should have 0 chips and need rebuy
-    // Wait for waiting phase
-    await waitForPhase(pages.host, 'waiting', 12000);
-    await wait(1000);
 
-    const rebuyResults = [];
-    for (const { page, name } of playerList) {
-      const chips = await getMyChips(page);
-      const hasRebuy = await hasRebuyButton(page);
-      log(`  ${name}: chips=${chips ?? '?'} rebuy=${hasRebuy}`);
-
-      if (hasRebuy) {
-        await ss(page, `rebuy-button-${name.toLowerCase()}`);
-        await clickButton(page, 'Rebuy');
-        await wait(1500);
-        const chipsAfter = await getMyChips(page);
-        log(`  ${name} rebuy → chips after: ${chipsAfter ?? '?'}`);
-        rebuyResults.push({ name, chipsAfter, ok: chipsAfter !== null && chipsAfter > 0 });
-        await ss(page, `rebuy-done-${name.toLowerCase()}`);
+    // Helper: run rebuy check + click for all busted players simultaneously
+    async function tryRebuyAll(label = '') {
+      const results = [];
+      // First snapshot all states at once (before any rebuy changes phase)
+      const states = await Promise.all(playerList.map(async ({ page, name }) => ({
+        name, page,
+        chips: await getMyChips(page),
+        hasRebuy: await hasRebuyButton(page),
+      })));
+      for (const s of states) {
+        log(`  ${s.name}: chips=${s.chips ?? '?'} rebuy=${s.hasRebuy}`);
       }
+      // Screenshot all who need rebuy, then click
+      for (const s of states.filter(s => s.hasRebuy)) {
+        await ss(s.page, `rebuy-button-${label}${s.name.toLowerCase()}`);
+        await clickButton(s.page, 'Rebuy');
+        await wait(500);
+        const after = await getMyChips(s.page);
+        log(`  ${s.name} rebuy → ${after ?? '?'} chips`);
+        results.push({ name: s.name, chipsAfter: after, ok: after != null && after > 0 });
+        await ss(s.page, `rebuy-done-${label}${s.name.toLowerCase()}`);
+      }
+      return results;
     }
 
+    // Wait for waiting phase — game should hold here since not enough playable players
+    const gotWaiting = await waitForPhase(pages.host, 'waiting', 15000);
+    if (!gotWaiting) warn('Waiting phase not detected after all-in hands');
+    await wait(800);
+
+    let rebuyResults = await tryRebuyAll();
+
     if (rebuyResults.length === 0) {
-      warn('No player needed rebuy — all-in hands may not have caused bust. Checking chips...');
-      // Force a bust: play more all-in hands
-      log('  Playing 2 more all-in hands to force a bust...');
+      warn('No rebuy needed yet — playing 2 more all-in hands to force a bust...');
       for (let h = 8; h <= 9; h++) {
-        await waitForAnyPhase(pages.host, ['preflop', 'waiting'], 12000);
-        const p = await getPhase(pages.host);
+        const p = await waitForAnyPhase(pages.host, ['preflop', 'waiting'], 12000);
         if (p === 'preflop') {
           log(`\n  🃏 Hand ${h} — ALL-IN`);
-          for (const street of ['preflop', 'flop', 'turn', 'river']) {
+          await playStreet(playerList, 'allin');
+          for (const street of ['flop', 'turn', 'river']) {
             const cur = await getPhase(pages.host);
             if (cur === 'result' || cur === 'waiting') break;
-            if (cur !== street) await waitForPhase(pages.host, street, 8000);
-            const c2 = await getPhase(pages.host);
-            if (c2 !== street) continue;
+            await waitForPhase(pages.host, street, 6000);
             await playStreet(playerList, 'allin');
           }
           await waitForAnyPhase(pages.host, ['result', 'waiting'], 10000);
         }
         await waitForPhase(pages.host, 'waiting', 12000);
-        await wait(1000);
-        for (const { page, name } of playerList) {
-          if (await hasRebuyButton(page)) {
-            await ss(page, `rebuy-button-${name.toLowerCase()}`);
-            await clickButton(page, 'Rebuy');
-            await wait(1500);
-            const ca = await getMyChips(page);
-            log(`  ${name} rebuy → ${ca ?? '?'} chips`);
-            rebuyResults.push({ name, chipsAfter: ca, ok: ca != null && ca > 0 });
-            await ss(page, `rebuy-done-${name.toLowerCase()}`);
-          }
-        }
+        await wait(800);
+        rebuyResults = await tryRebuyAll(`h${h}-`);
         if (rebuyResults.length > 0) break;
       }
     }
@@ -602,7 +599,7 @@ async function main() {
         log(`    ${r.name}: ${r.ok ? '✅' : '❌'} chips=${r.chipsAfter}`);
       }
     } else {
-      warn('No rebuy was triggered — starting chips may be too high relative to blinds');
+      warn('No rebuy was triggered — all-in hands may not have caused a bust');
     }
 
     // ── 10. 2 more hands after rebuy ────────────────────────────────────────
