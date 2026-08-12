@@ -21,6 +21,7 @@ export class GameSession extends EventEmitter {
   config: RoomConfig;
   private deck: string[] = [];
   private currentBet = 0;
+  private lastRaiseSize = 0;
   private turnTimer: ReturnType<typeof setTimeout> | null = null;
   // Tracks which active players have voluntarily acted this betting round.
   // Reset on each new street and when a raise reopens betting.
@@ -119,7 +120,54 @@ export class GameSession extends EventEmitter {
   removePlayer(playerId: string): void {
     if (this.game.phase !== 'waiting' && this.game.phase !== 'result') {
       const player = this.players.find(p => p.id === playerId);
-      if (player) { player.isConnected = false; player.status = 'folded'; }
+      if (!player) return;
+
+      // Snapshot seated array BEFORE removing this player (indices still valid)
+      const seatedBefore = getSeatedPlayers(this.players);
+      const disconnectedIdx = seatedBefore.findIndex(p => p.id === playerId);
+      const wasCurrentTurn = disconnectedIdx !== -1 && disconnectedIdx === this.game.currentPlayerIndex;
+
+      player.isConnected = false;
+      player.status = 'folded';
+      this.playersActedThisRound.add(playerId);
+
+      if (wasCurrentTurn) {
+        this.clearTurnTimer();
+        const seatedNow = getSeatedPlayers(this.players);
+        const stillIn = seatedNow.filter(p => p.status === 'active' || p.status === 'allin');
+
+        if (stillIn.length <= 1) {
+          this.resolveSingleWinner();
+          return;
+        }
+
+        const active = seatedNow.filter(p => p.status === 'active');
+        const allCalled = active.every(p => p.bet >= this.currentBet || p.chips === 0);
+        const allActed = active.every(p => this.playersActedThisRound.has(p.id));
+
+        if (active.length === 0 || (allCalled && allActed)) {
+          this.advanceStreet(seatedNow);
+          return;
+        }
+
+        // Find next active player from disconnected player's old position
+        const startIdx = disconnectedIdx % Math.max(seatedNow.length, 1);
+        let nextIdx = -1;
+        for (let i = 0; i < seatedNow.length; i++) {
+          const candidate = (startIdx + i) % seatedNow.length;
+          if (seatedNow[candidate].status === 'active') { nextIdx = candidate; break; }
+        }
+        if (nextIdx !== -1) this.game.currentPlayerIndex = nextIdx;
+        this.game.turnStartedAt = Date.now();
+        this.emit('state-updated');
+        this.startTurnTimer();
+        return;
+      }
+
+      // Not their turn — fix index if disconnected player was before current in seated array
+      if (disconnectedIdx !== -1 && disconnectedIdx < this.game.currentPlayerIndex) {
+        this.game.currentPlayerIndex = Math.max(0, this.game.currentPlayerIndex - 1);
+      }
     } else {
       this.players = this.players.filter(p => p.id !== playerId);
     }
@@ -203,6 +251,7 @@ export class GameSession extends EventEmitter {
 
     this.currentBet = this.game.bigBlind;
     this.game.currentBet = this.currentBet;
+    this.lastRaiseSize = this.game.bigBlind;
 
     // Deal hole cards
     this.deck = shuffle(createDeck());
@@ -249,16 +298,18 @@ export class GameSession extends EventEmitter {
       currentPlayer.stats.vpipHands++;
       this.playersActedThisRound.add(playerId);
     } else if (type === 'raise') {
-      const raiseTotal = amount ?? this.currentBet * 2;
+      const raiseTotal = amount ?? this.currentBet + this.lastRaiseSize;
       const diff = raiseTotal - currentPlayer.bet;
       const actual = Math.min(diff, currentPlayer.chips);
       currentPlayer.chips -= actual;
       currentPlayer.bet += actual;
       currentPlayer.totalBet += actual;
       if (currentPlayer.chips === 0) currentPlayer.status = 'allin';
+      const prevBet = this.currentBet;
       this.currentBet = currentPlayer.bet;
       this.game.currentBet = this.currentBet;
-      this.game.minRaise = this.currentBet * 2;
+      this.lastRaiseSize = Math.max(this.currentBet - prevBet, this.game.bigBlind);
+      this.game.minRaise = this.currentBet + this.lastRaiseSize;
       currentPlayer.lastAction = `Raise ${currentPlayer.bet}`;
       currentPlayer.stats.vpipHands++;
       // Raise reopens betting: everyone else must act again
@@ -271,8 +322,11 @@ export class GameSession extends EventEmitter {
       currentPlayer.status = 'allin';
       currentPlayer.lastAction = 'All-in';
       if (currentPlayer.bet > this.currentBet) {
+        const prevBet = this.currentBet;
         this.currentBet = currentPlayer.bet;
         this.game.currentBet = this.currentBet;
+        this.lastRaiseSize = Math.max(this.currentBet - prevBet, this.game.bigBlind);
+        this.game.minRaise = this.currentBet + this.lastRaiseSize;
         // All-in raise reopens betting
         this.playersActedThisRound = new Set([playerId]);
       } else {
@@ -324,6 +378,7 @@ export class GameSession extends EventEmitter {
     this.game.pot = pot;
     this.currentBet = 0;
     this.game.currentBet = 0;
+    this.lastRaiseSize = this.game.bigBlind;
     this.game.minRaise = this.game.bigBlind;
     this.playersActedThisRound = new Set();
 

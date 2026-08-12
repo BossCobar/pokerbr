@@ -287,6 +287,24 @@ export function PokerTable({
         </div>
       )}
 
+      {/* ── "SUA VEZ" banner (mobile) ── */}
+      <AnimatePresence>
+        {isMyTurn && game.phase !== 'waiting' && game.phase !== 'result' && (
+          <motion.div
+            key="sua-vez"
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            className="md:hidden flex-shrink-0 flex items-center justify-center py-1.5 z-20 gap-2"
+            style={{ background: 'rgba(200,168,75,0.08)', borderBottom: '1px solid rgba(200,168,75,0.2)' }}
+          >
+            <span className="w-2 h-2 rounded-full bg-[#c8a84b] animate-pulse" />
+            <span className="text-[#c8a84b] text-xs font-black tracking-widest uppercase">Sua vez</span>
+            <span className="w-2 h-2 rounded-full bg-[#c8a84b] animate-pulse" />
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* ── Betting controls ── */}
       <AnimatePresence>
         {isMyTurn && me && game.phase !== 'waiting' && game.phase !== 'result' && (

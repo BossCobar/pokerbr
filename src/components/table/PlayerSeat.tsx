@@ -95,10 +95,12 @@ export function PlayerSeat({ player, seatIndex, totalSeats, myCards, isMyTurn, m
       >
         {/* Badges row */}
         <div className="flex justify-center gap-0.5 mb-0.5 text-[8px] sm:text-[9px] font-bold flex-wrap">
-          {player.isDealer && <span className="bg-white text-black rounded px-0.5 sm:px-1">D</span>}
-          {player.isSB && <span className="bg-blue-500 text-white rounded px-0.5 sm:px-1">SB</span>}
-          {player.isBB && <span className="bg-red-500 text-white rounded px-0.5 sm:px-1">BB</span>}
-          {isMe && <span className="bg-[#c8a84b] text-black rounded px-0.5 sm:px-1">Você</span>}
+          {player.isDealer && (
+            <span className="w-4 h-4 sm:w-5 sm:h-5 rounded-full bg-white text-black flex items-center justify-center font-black text-[9px] shadow-md">D</span>
+          )}
+          {player.isSB && <span className="bg-blue-600 text-white rounded-full px-1">SB</span>}
+          {player.isBB && <span className="bg-red-600 text-white rounded-full px-1">BB</span>}
+          {isMe && <span className="bg-[#c8a84b] text-black rounded-full px-1">Você</span>}
         </div>
 
         {/* Name */}
@@ -111,9 +113,12 @@ export function PlayerSeat({ player, seatIndex, totalSeats, myCards, isMyTurn, m
           {player.chips.toLocaleString('pt-BR')}
         </div>
 
-        {/* Current bet */}
+        {/* Current bet chip */}
         {player.bet > 0 && (
-          <div className="text-yellow-300 text-[9px] sm:text-[10px] font-medium">
+          <div
+            className="inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[9px] font-black mt-0.5"
+            style={{ background: 'rgba(200,168,75,0.18)', color: '#f0c040', border: '1px solid rgba(200,168,75,0.3)' }}
+          >
             🪙 {player.bet.toLocaleString('pt-BR')}
           </div>
         )}
