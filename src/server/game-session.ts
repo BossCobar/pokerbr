@@ -514,7 +514,7 @@ export class GameSession extends EventEmitter {
     this.game.phase = 'result';
     this.clearTurnTimer();
     this.emit('state-updated');
-    setTimeout(() => this.prepareNextHand(), 4000);
+    setTimeout(() => this.prepareNextHand(), 6000);
   }
 
   private resolveShowdown(): void {
@@ -538,7 +538,7 @@ export class GameSession extends EventEmitter {
     this.game.phase = 'result';
     this.clearTurnTimer();
     this.emit('state-updated');
-    setTimeout(() => this.prepareNextHand(), 5000);
+    setTimeout(() => this.prepareNextHand(), 7000);
   }
 
   private prepareNextHand(): void {

@@ -9,7 +9,7 @@ export function WinnerOverlay({ result }: { result: HandResult | null }) {
 
   useEffect(() => {
     if (!result) return;
-    setCountdown(5);
+    setCountdown(7);
     const interval = setInterval(() => {
       setCountdown(n => {
         if (n <= 1) { clearInterval(interval); return 0; }

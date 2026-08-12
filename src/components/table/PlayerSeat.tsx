@@ -94,22 +94,25 @@ export function PlayerSeat({ player, seatIndex, totalSeats, myCards, isMyTurn, m
         style={{ minWidth: '76px', maxWidth: '100px' }}
       >
         {/* Badges row */}
-        <div className="flex justify-center gap-0.5 mb-0.5 text-[8px] sm:text-[9px] font-bold flex-wrap">
+        <div className="flex justify-center gap-0.5 mb-0.5 text-[8px] font-bold flex-wrap items-center">
           {player.isDealer && (
-            <span className="w-4 h-4 sm:w-5 sm:h-5 rounded-full bg-white text-black flex items-center justify-center font-black text-[9px] shadow-md">D</span>
+            <span className="w-4 h-4 rounded-full bg-white text-black flex items-center justify-center font-black text-[9px] shadow-md flex-shrink-0">D</span>
           )}
-          {player.isSB && <span className="bg-blue-600 text-white rounded-full px-1">SB</span>}
-          {player.isBB && <span className="bg-red-600 text-white rounded-full px-1">BB</span>}
-          {isMe && <span className="bg-[#c8a84b] text-black rounded-full px-1">Você</span>}
+          {player.isSB && <span className="bg-blue-600 text-white rounded-full px-1 leading-tight">SB</span>}
+          {player.isBB && <span className="bg-red-600 text-white rounded-full px-1 leading-tight">BB</span>}
+          {/* Show "Eu" only when no role badge is present, to avoid crowding */}
+          {isMe && !player.isDealer && !player.isSB && !player.isBB && (
+            <span className="text-[#c8a84b] font-black text-[8px]">★</span>
+          )}
         </div>
 
         {/* Name */}
-        <div className="text-white text-[10px] sm:text-xs font-bold truncate leading-tight px-0.5">
+        <div className={`text-[10px] sm:text-xs font-bold truncate leading-tight px-0.5 ${isMe ? 'text-[#c8a84b]' : 'text-white'}`}>
           {player.nickname}
         </div>
 
         {/* Chips */}
-        <div className="text-[#c8a84b] text-[10px] sm:text-xs font-semibold mt-0.5">
+        <div className="text-gray-300 text-[10px] font-semibold mt-0.5">
           {player.chips.toLocaleString('pt-BR')}
         </div>
 

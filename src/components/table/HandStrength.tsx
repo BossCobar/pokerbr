@@ -72,13 +72,13 @@ export function HandStrength({ holeCards, communityCards }: Props) {
           <span className="text-sm">{icon}</span>
           <span className="font-black text-sm" style={{ color }}>{handName}</span>
         </div>
-        <span className="text-gray-500 text-[10px] font-medium">{pct}º percentil</span>
+        <span className="text-gray-500 text-[10px] font-medium">top {100 - pct}%</span>
       </div>
       {/* Strength bar */}
       <div className="h-1.5 w-full bg-gray-800 rounded-full overflow-hidden">
         <div
           className="h-full rounded-full transition-all duration-500"
-          style={{ width: `${pct}%`, backgroundColor: color, boxShadow: `0 0 6px ${color}80` }}
+          style={{ width: `${Math.max(pct, 5)}%`, backgroundColor: color, boxShadow: `0 0 6px ${color}80` }}
         />
       </div>
     </div>

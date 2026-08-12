@@ -93,6 +93,7 @@ export function HomeScreen() {
           {(['create', 'join'] as const).map(t => (
             <button
               key={t}
+              type="button"
               onClick={() => setTab(t)}
               className={`flex-1 py-2.5 rounded-lg text-sm font-bold transition-all ${
                 tab === t
