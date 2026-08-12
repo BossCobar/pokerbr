@@ -35,6 +35,11 @@ export function BettingControls({
     { label: 'Pote', value: pot },
   ];
 
+  // Compute pot odds for the Call button: ratio of (pot + call) to call
+  const potOdds = callAmount > 0 && pot > 0
+    ? `${Math.round((pot + callAmount) / callAmount)}:1`
+    : null;
+
   return (
     <div className="flex flex-col gap-2 w-full max-w-lg">
       {turnTimeLimit > 0 && (
@@ -98,6 +103,9 @@ export function BettingControls({
           >
             <span className="block">Call</span>
             <span className="block text-xs font-normal opacity-90">{callAmount.toLocaleString('pt-BR')}</span>
+            {potOdds && (
+              <span className="block text-[10px] font-normal opacity-60">{potOdds}</span>
+            )}
           </button>
         )}
         <button

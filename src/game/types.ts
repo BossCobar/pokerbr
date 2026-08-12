@@ -20,6 +20,7 @@ export interface Player {
   isBB: boolean;
   stats: PlayerStats;
   isConnected: boolean;
+  lastAction?: string;   // e.g. "Fold", "Call 20", "Raise 60", "Check", "All-in"
 }
 
 export interface PlayerStats {

@@ -5,6 +5,7 @@ import { CommunityCards } from './CommunityCards';
 import { Pot } from './Pot';
 import { PlayerSeat } from './PlayerSeat';
 import { BettingControls } from './BettingControls';
+import { HandStrength } from './HandStrength';
 import { Chat } from './Chat';
 import { HandHistory } from './HandHistory';
 import { WinnerOverlay } from './WinnerOverlay';
@@ -162,7 +163,7 @@ export function PokerTable({
             <TableFelt>
               <div className="flex flex-col items-center gap-1 sm:gap-2">
                 {game.communityCards.length > 0 && (
-                  <CommunityCards cards={game.communityCards} />
+                  <CommunityCards cards={game.communityCards} street={game.street} />
                 )}
                 <Pot amount={game.pot} />
                 {game.phase === 'waiting' && (
@@ -300,9 +301,19 @@ export function PokerTable({
         </>
       </div>
 
+      {/* Hand strength display when not your turn (observing) */}
+      {!isMyTurn && myCards.length >= 2 && me && game.phase !== 'waiting' && game.phase !== 'result' && (
+        <div className="flex-shrink-0 px-2 pb-2 flex justify-center z-30">
+          <HandStrength holeCards={myCards} communityCards={game.communityCards} />
+        </div>
+      )}
+
       {/* Betting controls */}
       {isMyTurn && me && game.phase !== 'waiting' && game.phase !== 'result' && (
-        <div className="flex-shrink-0 p-2 sm:p-3 bg-[#0d1117]/90 border-t border-gray-800 flex justify-center z-30">
+        <div className="flex-shrink-0 p-2 sm:p-3 bg-[#0d1117]/90 border-t border-gray-800 flex flex-col items-center gap-2 z-30">
+          {myCards.length >= 2 && (
+            <HandStrength holeCards={myCards} communityCards={game.communityCards} />
+          )}
           <BettingControls
             canCheck={canCheck}
             callAmount={callAmount}

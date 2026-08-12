@@ -50,10 +50,15 @@ export class GameSession extends EventEmitter {
   }
 
   getRoomState(): RoomState {
+    const revealCards = this.game.phase === 'result' || this.game.phase === 'showdown';
     return {
       code: this.code,
       hostId: this.hostId,
-      players: this.players.map(p => ({ ...p, holeCards: [] })),
+      players: this.players.map(p => ({
+        ...p,
+        // Reveal all hole cards at showdown/result so players can see opponents' hands
+        holeCards: revealCards ? p.holeCards : [],
+      })),
       game: this.game,
       chatMessages: this.chatMessages,
       maxSeats: this.maxSeats,
@@ -158,6 +163,7 @@ export class GameSession extends EventEmitter {
       ...p,
       bet: 0, totalBet: 0, holeCards: [],
       isDealer: false, isSB: false, isBB: false,
+      lastAction: undefined,
       status: (p.seatIndex !== null && p.isConnected && p.chips > 0 ? 'active' : p.status) as Player['status'],
     }));
 
@@ -228,8 +234,10 @@ export class GameSession extends EventEmitter {
 
     if (type === 'fold') {
       currentPlayer.status = 'folded';
+      currentPlayer.lastAction = 'Fold';
       this.playersActedThisRound.add(playerId);
     } else if (type === 'check') {
+      currentPlayer.lastAction = 'Check';
       this.playersActedThisRound.add(playerId);
     } else if (type === 'call') {
       const callAmt = getCallAmount(currentPlayer, this.currentBet);
@@ -237,6 +245,7 @@ export class GameSession extends EventEmitter {
       currentPlayer.bet += callAmt;
       currentPlayer.totalBet += callAmt;
       if (currentPlayer.chips === 0) currentPlayer.status = 'allin';
+      currentPlayer.lastAction = `Call ${callAmt}`;
       currentPlayer.stats.vpipHands++;
       this.playersActedThisRound.add(playerId);
     } else if (type === 'raise') {
@@ -250,6 +259,7 @@ export class GameSession extends EventEmitter {
       this.currentBet = currentPlayer.bet;
       this.game.currentBet = this.currentBet;
       this.game.minRaise = this.currentBet * 2;
+      currentPlayer.lastAction = `Raise ${currentPlayer.bet}`;
       currentPlayer.stats.vpipHands++;
       // Raise reopens betting: everyone else must act again
       this.playersActedThisRound = new Set([playerId]);
@@ -259,6 +269,7 @@ export class GameSession extends EventEmitter {
       currentPlayer.totalBet += allInAmt;
       currentPlayer.chips = 0;
       currentPlayer.status = 'allin';
+      currentPlayer.lastAction = 'All-in';
       if (currentPlayer.bet > this.currentBet) {
         this.currentBet = currentPlayer.bet;
         this.game.currentBet = this.currentBet;

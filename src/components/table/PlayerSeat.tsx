@@ -42,17 +42,24 @@ const statusBorder: Record<string, string> = {
   'sitting-out': 'border-gray-700',
 };
 
-const statusText: Record<string, string> = {
-  waiting: 'Aguardando',
-  folded: 'FOLD',
-  allin: 'ALL-IN',
-  'sitting-out': 'Ausente',
+const lastActionColor: Record<string, string> = {
+  'Fold': 'text-red-400',
+  'Check': 'text-gray-400',
+  'All-in': 'text-purple-400',
 };
+
+function getLastActionColor(action: string): string {
+  if (action in lastActionColor) return lastActionColor[action];
+  if (action.startsWith('Call')) return 'text-blue-400';
+  if (action.startsWith('Raise')) return 'text-yellow-400';
+  return 'text-gray-400';
+}
 
 export function PlayerSeat({ player, seatIndex, totalSeats, myCards, isMyTurn, myId, isSeated, onSit }: Props) {
   const style = getSeatStyle(seatIndex, totalSeats);
   const isMe = player?.id === myId;
-  const cards = isMe ? myCards : [];
+  // Use own cards from myCards prop for me; use holeCards from room state for opponents (revealed at showdown)
+  const cards = isMe ? myCards : (player?.holeCards ?? []);
 
   if (!player) {
     return (
@@ -80,14 +87,14 @@ export function PlayerSeat({ player, seatIndex, totalSeats, myCards, isMyTurn, m
     <div style={style} className={`z-20 ${opacity}`}>
       <motion.div
         animate={isMyTurn ? {
-          boxShadow: ['0 0 0px rgba(251,191,36,0)', '0 0 16px rgba(251,191,36,0.8)', '0 0 0px rgba(251,191,36,0)'],
+          boxShadow: ['0 0 0px rgba(251,191,36,0)', '0 0 20px rgba(251,191,36,0.9)', '0 0 0px rgba(251,191,36,0)'],
         } : { boxShadow: '0 0 0px rgba(0,0,0,0)' }}
         transition={{ duration: 1.2, repeat: Infinity }}
         className={`border-2 rounded-xl p-1 sm:p-2 text-center bg-black/80 backdrop-blur-sm ${borderClass}`}
-        style={{ minWidth: '72px', maxWidth: '92px' }}
+        style={{ minWidth: '76px', maxWidth: '100px' }}
       >
         {/* Badges row */}
-        <div className="flex justify-center gap-0.5 mb-0.5 text-[8px] sm:text-[9px] font-bold">
+        <div className="flex justify-center gap-0.5 mb-0.5 text-[8px] sm:text-[9px] font-bold flex-wrap">
           {player.isDealer && <span className="bg-white text-black rounded px-0.5 sm:px-1">D</span>}
           {player.isSB && <span className="bg-blue-500 text-white rounded px-0.5 sm:px-1">SB</span>}
           {player.isBB && <span className="bg-red-500 text-white rounded px-0.5 sm:px-1">BB</span>}
@@ -111,20 +118,41 @@ export function PlayerSeat({ player, seatIndex, totalSeats, myCards, isMyTurn, m
           </div>
         )}
 
-        {/* Status */}
-        {statusText[player.status] && (
-          <div className={`text-[8px] sm:text-[9px] font-bold mt-0.5 ${player.status === 'allin' ? 'text-yellow-400' : player.status === 'folded' ? 'text-red-500' : 'text-gray-400'}`}>
-            {statusText[player.status]}
+        {/* Last action badge */}
+        {player.lastAction && (
+          <div className={`text-[8px] sm:text-[9px] font-semibold mt-0.5 ${getLastActionColor(player.lastAction)}`}>
+            {player.lastAction}
+          </div>
+        )}
+
+        {/* ALL-IN badge */}
+        {player.status === 'allin' && (
+          <div className="text-[9px] font-bold mt-0.5 bg-yellow-400/20 border border-yellow-400/40 text-yellow-400 rounded px-1">
+            ALL-IN
+          </div>
+        )}
+
+        {/* Status text (fold only — allin has its own badge above) */}
+        {player.status === 'folded' && (
+          <div className="text-[8px] sm:text-[9px] font-bold mt-0.5 text-red-500">
+            FOLD
+          </div>
+        )}
+        {player.status === 'waiting' && (
+          <div className="text-[8px] sm:text-[9px] text-gray-500 mt-0.5">
+            Aguardando
           </div>
         )}
 
         {/* Cards */}
         <div className="flex gap-0.5 justify-center mt-0.5 sm:mt-1">
-          {isMe && cards.length > 0
-            ? cards.map((c, i) => <Card key={c} card={c} delay={i * 0.12} size="sm" />)
-            : player.status !== 'waiting' && player.status !== 'spectating' && !isMe && player.holeCards.length > 0
-              ? [0, 1].map(i => <CardBack key={i} size="sm" />)
-              : null
+          {isMe && myCards.length > 0
+            ? myCards.map((c, i) => <Card key={c} card={c} delay={i * 0.12} size="sm" />)
+            : cards.length > 0
+              ? cards.map((c, i) => <Card key={c} card={c} delay={i * 0.12} size="sm" />)
+              : player.status !== 'waiting' && player.status !== 'spectating' && player.status !== 'folded' && !isMe
+                ? [0, 1].map(i => <CardBack key={i} size="sm" />)
+                : null
           }
         </div>
       </motion.div>
