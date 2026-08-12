@@ -23,6 +23,7 @@ export class GameSession extends EventEmitter {
   private currentBet = 0;
   private lastRaiseSize = 0;
   private turnTimer: ReturnType<typeof setTimeout> | null = null;
+  private startHandTimer: ReturnType<typeof setTimeout> | null = null;
   // Tracks which active players have voluntarily acted this betting round.
   // Reset on each new street and when a raise reopens betting.
   private playersActedThisRound = new Set<string>();
@@ -560,7 +561,7 @@ export class GameSession extends EventEmitter {
     });
     this.game.phase = 'waiting';
     this.emit('state-updated');
-    if (this.canStart()) setTimeout(() => this.startHand(), 2000);
+    if (this.canStart()) this.scheduleStartHand();
   }
 
   requestRebuy(playerId: string): boolean {
@@ -571,8 +572,16 @@ export class GameSession extends EventEmitter {
     player.chips = this.config.rebuyAmount || this.game.startingChips;
     player.status = 'waiting';
     this.emit('state-updated');
-    if (this.canStart()) setTimeout(() => this.startHand(), 2000);
+    if (this.canStart()) this.scheduleStartHand();
     return true;
+  }
+
+  private scheduleStartHand(): void {
+    if (this.startHandTimer) clearTimeout(this.startHandTimer);
+    this.startHandTimer = setTimeout(() => {
+      this.startHandTimer = null;
+      this.startHand();
+    }, 2000);
   }
 
   private startTurnTimer(): void {

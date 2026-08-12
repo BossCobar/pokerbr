@@ -551,11 +551,16 @@ async function main() {
       for (const s of states) {
         log(`  ${s.name}: chips=${s.chips ?? '?'} rebuy=${s.hasRebuy}`);
       }
-      // Screenshot all who need rebuy, then click
-      for (const s of states.filter(s => s.hasRebuy)) {
+        // Screenshot all who need rebuy
+      const busted = states.filter(s => s.hasRebuy);
+      for (const s of busted) {
         await ss(s.page, `rebuy-button-${label}${s.name.toLowerCase()}`);
-        await clickButton(s.page, 'Rebuy');
-        await wait(500);
+      }
+      // Click all rebuys in parallel so they all land before the 2s auto-start timer fires
+      await Promise.all(busted.map(s => clickButton(s.page, 'Rebuy')));
+      // Wait for state to propagate, then read chips
+      await wait(1200);
+      for (const s of busted) {
         const after = await getMyChips(s.page);
         log(`  ${s.name} rebuy → ${after ?? '?'} chips`);
         results.push({ name: s.name, chipsAfter: after, ok: after != null && after > 0 });
@@ -645,12 +650,20 @@ async function main() {
       if (document.documentElement.scrollWidth > bw + 2) {
         issues.push(`Body overflow: ${document.documentElement.scrollWidth}px`);
       }
+      function hasOffscreenAncestor(el) {
+        let cur = el.parentElement;
+        while (cur && cur !== document.body) {
+          const t = window.getComputedStyle(cur).transform;
+          if (t && t !== 'none' && t !== 'matrix(1, 0, 0, 1, 0, 0)') return true;
+          cur = cur.parentElement;
+        }
+        return false;
+      }
       document.querySelectorAll('button').forEach(b => {
         const r = b.getBoundingClientRect();
         if (r.width > 0 && r.height > 0 && r.right > bw + 4) {
-          const style = window.getComputedStyle(b.parentElement);
-          // Skip off-screen sidebars (transform: translateX)
-          if (style.transform && style.transform !== 'none') return;
+          // Skip buttons inside off-screen sidebars (translateX)
+          if (hasOffscreenAncestor(b)) return;
           issues.push(`Button OOB: "${b.innerText.trim().slice(0, 20)}" right=${Math.round(r.right)}`);
         }
       });
