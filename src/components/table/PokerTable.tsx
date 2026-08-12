@@ -74,6 +74,8 @@ export function PokerTable({
   const callAmount = me && game ? getCallAmount(me, currentBet) : 0;
   const canCheck = me && game ? me.bet >= currentBet : false;
   const needsRebuy = me && me.chips <= 0 && room.config?.allowRebuy && game?.phase === 'waiting';
+  // Total chips at stake = collected pot + all current street bets (makes pot visible preflop too)
+  const effectivePot = game ? game.pot + players.reduce((s, p) => s + p.bet, 0) : 0;
 
   function copyCode() {
     navigator.clipboard.writeText(room.code).catch(() => {});
@@ -149,7 +151,7 @@ export function PokerTable({
                 {game.communityCards.length > 0 && (
                   <CommunityCards cards={game.communityCards} street={game.street} />
                 )}
-                <Pot amount={game.pot} />
+                <Pot amount={effectivePot} />
                 {game.phase === 'waiting' && (
                   <div className="text-gray-600 text-xs sm:text-sm text-center px-2 font-medium">
                     {seated.length < 2
@@ -326,7 +328,7 @@ export function PokerTable({
               callAmount={callAmount}
               minRaise={game.minRaise ?? game.bigBlind * 2}
               myChips={me.chips}
-              pot={game.pot}
+              pot={effectivePot}
               turnStartedAt={game.turnStartedAt ?? Date.now()}
               turnTimeLimit={game.turnTimeLimit ?? 30}
               onAction={onAction}

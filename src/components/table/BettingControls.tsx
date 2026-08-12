@@ -21,7 +21,7 @@ export function BettingControls({
   const [raiseAmt, setRaiseAmt] = useState(minRaise);
 
   useEffect(() => {
-    setRaiseAmt(prev => Math.max(prev, minRaise));
+    setRaiseAmt(minRaise);
   }, [minRaise]);
 
   function act(type: ActionType, amount?: number) {
@@ -59,7 +59,7 @@ export function BettingControls({
           <input
             type="range"
             min={minRaise}
-            max={myChips}
+            max={Math.max(myChips, minRaise)}
             step={Math.max(1, Math.floor(pot / 100) || 1)}
             value={raiseAmt}
             onChange={e => setRaiseAmt(Number(e.target.value))}
