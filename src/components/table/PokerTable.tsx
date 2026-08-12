@@ -94,7 +94,7 @@ export function PokerTable({
   const phaseC = phaseColor[game.phase] ?? '#6b7280';
 
   return (
-    <div className="w-full h-[100dvh] flex flex-col overflow-hidden" style={{ background: 'radial-gradient(ellipse at 50% 30%, #0a1628 0%, #050a0e 100%)' }}>
+    <div data-phase={game.phase} className="w-full h-[100dvh] flex flex-col overflow-hidden" style={{ background: 'radial-gradient(ellipse at 50% 30%, #0a1628 0%, #050a0e 100%)' }}>
 
       {/* ── Header ── */}
       <div className="flex items-center justify-between px-2 sm:px-4 py-2 z-30 flex-shrink-0 border-b border-white/5" style={{ background: 'rgba(5,10,14,0.92)', backdropFilter: 'blur(12px)' }}>
