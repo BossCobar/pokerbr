@@ -9,7 +9,9 @@ export function WinnerOverlay({ result }: { result: HandResult | null }) {
 
   useEffect(() => {
     if (!result) return;
-    setCountdown(7);
+    // showdown (allHands revealed) waits 7s, fold win waits 6s — match server
+    const duration = result.allHands && result.allHands.length > 1 ? 7 : 6;
+    setCountdown(duration);
     const interval = setInterval(() => {
       setCountdown(n => {
         if (n <= 1) { clearInterval(interval); return 0; }
