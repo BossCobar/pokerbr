@@ -549,6 +549,11 @@ export class GameSession extends EventEmitter {
     }
     this.players = this.players.map(p => {
       if (p.chips <= 0 && p.seatIndex !== null) {
+        if (this.config.allowRebuy) {
+          // Rebuy enabled: sit them out so they must manually rebuy
+          return { ...p, status: 'sitting-out' as const };
+        }
+        // No rebuy: auto-restore chips so game continues
         return { ...p, chips: this.game.startingChips, status: 'waiting' as const };
       }
       return p;
@@ -565,6 +570,8 @@ export class GameSession extends EventEmitter {
     if (player.chips > 0 && player.seatIndex !== null) return false;
     player.chips = this.config.rebuyAmount || this.game.startingChips;
     player.status = 'waiting';
+    this.emit('state-updated');
+    if (this.canStart()) setTimeout(() => this.startHand(), 2000);
     return true;
   }
 

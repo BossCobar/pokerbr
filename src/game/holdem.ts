@@ -37,7 +37,7 @@ export function createInitialGameState(config: GameConfig): GameState {
 }
 
 export function getSeatedPlayers(players: Player[]): Player[] {
-  return players.filter(p => p.seatIndex !== null && p.status !== 'spectating' && p.isConnected);
+  return players.filter(p => p.seatIndex !== null && p.status !== 'spectating' && p.status !== 'sitting-out' && p.isConnected);
 }
 
 export function getActivePlayers(players: Player[]): Player[] {

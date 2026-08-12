@@ -151,6 +151,11 @@ export function PlayerSeat({ player, seatIndex, totalSeats, myCards, isMyTurn, m
             Aguardando
           </div>
         )}
+        {player.status === 'sitting-out' && (
+          <div className="text-[8px] sm:text-[9px] font-bold mt-0.5 text-orange-400">
+            Sem fichas
+          </div>
+        )}
 
         {/* Cards */}
         <div className="flex gap-0.5 justify-center mt-0.5 sm:mt-1">

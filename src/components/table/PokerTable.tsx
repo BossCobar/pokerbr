@@ -289,6 +289,21 @@ export function PokerTable({
         </div>
       )}
 
+      {/* ── Rebuy banner (prominent, all viewports) ── */}
+      {needsRebuy && (
+        <div className="flex-shrink-0 flex items-center justify-center gap-3 px-4 py-3 border-t border-orange-500/30 z-30"
+          style={{ background: 'rgba(249,115,22,0.08)' }}>
+          <div className="text-orange-400 text-sm font-bold">Você ficou sem fichas!</div>
+          <button
+            onClick={onRequestRebuy}
+            className="px-4 py-1.5 rounded-lg font-black text-sm text-black transition-all active:scale-95 shadow-lg"
+            style={{ background: 'linear-gradient(135deg, #f97316, #fb923c)', boxShadow: '0 0 16px rgba(249,115,22,0.4)' }}
+          >
+            Rebuy · {room.config?.rebuyAmount?.toLocaleString('pt-BR')} fichas
+          </button>
+        </div>
+      )}
+
       {/* ── "SUA VEZ" banner (mobile) ── */}
       <AnimatePresence>
         {isMyTurn && game.phase !== 'waiting' && game.phase !== 'result' && (
