@@ -31,50 +31,62 @@ export function BettingControls({
 
   const presets = [
     { label: '1/3', value: Math.floor(pot / 3) },
-    { label: '1/2', value: Math.floor(pot / 2) },
+    { label: '½', value: Math.floor(pot / 2) },
     { label: 'Pote', value: pot },
   ];
 
-  // Compute pot odds for the Call button: ratio of (pot + call) to call
   const potOdds = callAmount > 0 && pot > 0
     ? `${Math.round((pot + callAmount) / callAmount)}:1`
     : null;
 
+  const raiseValid = raiseAmt >= minRaise && myChips > 0;
+
   return (
     <div className="flex flex-col gap-2 w-full max-w-lg">
+
+      {/* Timer row */}
       {turnTimeLimit > 0 && (
-        <ActionTimer startedAt={turnStartedAt} limitSeconds={turnTimeLimit} />
+        <div className="flex items-center gap-3">
+          <ActionTimer startedAt={turnStartedAt} limitSeconds={turnTimeLimit} />
+          <div className="flex-1 h-px bg-white/5" />
+          <span className="text-[10px] text-gray-600 font-medium uppercase tracking-wider">Sua vez</span>
+        </div>
       )}
 
-      {/* Raise slider */}
-      <div className="bg-black/50 rounded-xl px-3 py-2 flex flex-col gap-2">
-        <div className="flex items-center gap-2">
+      {/* Raise control */}
+      <div className="rounded-xl px-3 py-2.5 flex flex-col gap-2 border border-white/5" style={{ background: 'rgba(255,255,255,0.04)' }}>
+        <div className="flex items-center gap-3">
           <input
             type="range"
             min={minRaise}
             max={myChips}
-            step={1}
+            step={Math.max(1, Math.floor(pot / 100) || 1)}
             value={raiseAmt}
             onChange={e => setRaiseAmt(Number(e.target.value))}
             className="flex-1 h-2 accent-yellow-400 cursor-pointer"
           />
-          <span className="text-[#c8a84b] font-bold text-sm min-w-[64px] text-right">
-            {raiseAmt.toLocaleString('pt-BR')}
-          </span>
+          <div className="text-right min-w-[72px]">
+            <div className="text-[#c8a84b] font-black text-sm leading-none">{raiseAmt.toLocaleString('pt-BR')}</div>
+            {pot > 0 && <div className="text-gray-600 text-[9px] mt-0.5">{Math.round((raiseAmt / pot) * 100)}% pote</div>}
+          </div>
         </div>
+
+        {/* Preset chips */}
         <div className="flex gap-1.5">
           {presets.map(p => (
             <button
               key={p.label}
               onClick={() => setRaiseAmt(Math.min(Math.max(p.value, minRaise), myChips))}
-              className="flex-1 text-xs bg-gray-700 active:bg-gray-500 hover:bg-gray-600 text-white px-2 py-1.5 rounded-lg touch-manipulation"
+              className="flex-1 py-1.5 rounded-lg text-[11px] font-bold transition-all touch-manipulation border border-white/5 hover:border-[#c8a84b]/40 text-gray-300 hover:text-[#c8a84b]"
+              style={{ background: 'rgba(255,255,255,0.05)' }}
             >
               {p.label}
             </button>
           ))}
           <button
             onClick={() => setRaiseAmt(myChips)}
-            className="flex-1 text-xs bg-gray-700 active:bg-gray-500 hover:bg-gray-600 text-white px-2 py-1.5 rounded-lg touch-manipulation"
+            className="flex-1 py-1.5 rounded-lg text-[11px] font-bold transition-all touch-manipulation border border-purple-500/20 text-purple-400 hover:border-purple-500/60"
+            style={{ background: 'rgba(168,85,247,0.08)' }}
           >
             Max
           </button>
@@ -83,41 +95,51 @@ export function BettingControls({
 
       {/* Action buttons */}
       <div className="grid grid-cols-4 gap-1.5 sm:gap-2">
+        {/* Fold */}
         <button
           onClick={() => act('fold')}
-          className="py-3.5 sm:py-3 bg-red-800 active:bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl transition-colors touch-manipulation text-sm"
+          className="py-4 sm:py-3.5 rounded-xl font-black text-sm transition-all touch-manipulation active:scale-95 border border-red-900/40"
+          style={{ background: 'linear-gradient(135deg, #7f1d1d, #991b1b)', color: '#fca5a5' }}
         >
           Fold
         </button>
+
+        {/* Check / Call */}
         {canCheck ? (
           <button
             onClick={() => act('check')}
-            className="py-3.5 sm:py-3 bg-gray-600 active:bg-gray-400 hover:bg-gray-500 text-white font-bold rounded-xl transition-colors touch-manipulation text-sm"
+            className="py-4 sm:py-3.5 rounded-xl font-black text-sm transition-all touch-manipulation active:scale-95 border border-white/10"
+            style={{ background: 'linear-gradient(135deg, #1f2937, #374151)', color: '#d1d5db' }}
           >
             Check
           </button>
         ) : (
           <button
             onClick={() => act('call')}
-            className="py-3.5 sm:py-3 bg-blue-700 active:bg-blue-500 hover:bg-blue-600 text-white font-bold rounded-xl transition-colors touch-manipulation text-sm leading-tight"
+            className="py-4 sm:py-3.5 rounded-xl font-black text-sm transition-all touch-manipulation active:scale-95 border border-blue-700/40 flex flex-col items-center justify-center leading-tight"
+            style={{ background: 'linear-gradient(135deg, #1d4ed8, #2563eb)', color: '#bfdbfe' }}
           >
-            <span className="block">Call</span>
-            <span className="block text-xs font-normal opacity-90">{callAmount.toLocaleString('pt-BR')}</span>
-            {potOdds && (
-              <span className="block text-[10px] font-normal opacity-60">{potOdds}</span>
-            )}
+            <span className="text-white font-black">Call</span>
+            <span className="text-blue-200 text-xs font-semibold opacity-90">{callAmount.toLocaleString('pt-BR')}</span>
+            {potOdds && <span className="text-blue-300 text-[9px] opacity-60">{potOdds}</span>}
           </button>
         )}
+
+        {/* Raise */}
         <button
           onClick={() => act('raise', raiseAmt)}
-          disabled={myChips <= 0}
-          className="py-3.5 sm:py-3 bg-[#c8a84b] active:bg-yellow-300 hover:bg-yellow-400 text-black font-bold rounded-xl transition-colors disabled:opacity-40 touch-manipulation text-sm"
+          disabled={!raiseValid}
+          className="py-4 sm:py-3.5 rounded-xl font-black text-sm transition-all touch-manipulation active:scale-95 disabled:opacity-30"
+          style={{ background: raiseValid ? 'linear-gradient(135deg, #b45309, #c8a84b)' : undefined, color: '#000' }}
         >
           Raise
         </button>
+
+        {/* All-in */}
         <button
           onClick={() => act('allin')}
-          className="py-3.5 sm:py-3 bg-purple-700 active:bg-purple-500 hover:bg-purple-600 text-white font-bold rounded-xl transition-colors touch-manipulation text-sm"
+          className="py-4 sm:py-3.5 rounded-xl font-black text-sm transition-all touch-manipulation active:scale-95 border border-purple-700/40"
+          style={{ background: 'linear-gradient(135deg, #581c87, #7c3aed)', color: '#e9d5ff' }}
         >
           All-in
         </button>
