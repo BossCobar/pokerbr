@@ -650,20 +650,11 @@ async function main() {
       if (document.documentElement.scrollWidth > bw + 2) {
         issues.push(`Body overflow: ${document.documentElement.scrollWidth}px`);
       }
-      function hasOffscreenAncestor(el) {
-        let cur = el.parentElement;
-        while (cur && cur !== document.body) {
-          const t = window.getComputedStyle(cur).transform;
-          if (t && t !== 'none' && t !== 'matrix(1, 0, 0, 1, 0, 0)') return true;
-          cur = cur.parentElement;
-        }
-        return false;
-      }
       document.querySelectorAll('button').forEach(b => {
         const r = b.getBoundingClientRect();
-        if (r.width > 0 && r.height > 0 && r.right > bw + 4) {
-          // Skip buttons inside off-screen sidebars (translateX)
-          if (hasOffscreenAncestor(b)) return;
+        // Only flag buttons whose LEFT edge is visible (started on screen but overflowed right).
+        // Buttons whose left edge is ≥ viewport width are entirely off-screen (e.g. sidebar panels).
+        if (r.width > 0 && r.height > 0 && r.left >= 0 && r.left < bw && r.right > bw + 4) {
           issues.push(`Button OOB: "${b.innerText.trim().slice(0, 20)}" right=${Math.round(r.right)}`);
         }
       });
