@@ -576,7 +576,7 @@ export class GameSession extends EventEmitter {
     return true;
   }
 
-  private scheduleStartHand(): void {
+  scheduleStartHand(): void {
     if (this.startHandTimer) clearTimeout(this.startHandTimer);
     this.startHandTimer = setTimeout(() => {
       this.startHandTimer = null;

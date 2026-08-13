@@ -39,9 +39,7 @@ export function useGame() {
   }, []);
 
   const leaveSeat = useCallback(() => socket.emit('leave-seat'), []);
-  const startGame = useCallback(() => socket.emit('start-game'), []);
-
-  const sendAction = useCallback((type: ActionType, amount?: number) => {
+const sendAction = useCallback((type: ActionType, amount?: number) => {
     socket.emit('action', { type, amount });
   }, []);
 
@@ -58,7 +56,7 @@ export function useGame() {
 
   return {
     ...store,
-    createRoom, joinRoom, sitDown, leaveSeat, startGame,
+    createRoom, joinRoom, sitDown, leaveSeat,
     sendAction, sendCucuruchoDecision, sendChat, requestRebuy,
     myId: socket.id,
   };

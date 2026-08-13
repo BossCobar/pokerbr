@@ -10,9 +10,9 @@ export default function RoomPage() {
   const code = (params?.code as string ?? '').toUpperCase();
 
   const {
-    roomState, myCards, nickname, roomCode,
+    roomState, myCards, nickname,
     cucuruchoPayInActive, cucuruchoPayInAmount,
-    joinRoom, sitDown, leaveSeat, startGame, sendAction,
+    joinRoom, sitDown, leaveSeat, sendAction,
     sendCucuruchoDecision, sendChat, requestRebuy, myId,
   } = useGame();
 
@@ -21,10 +21,11 @@ export default function RoomPage() {
       router.push(`/?join=${code}`);
       return;
     }
-    if (roomCode !== code) {
-      joinRoom(code, nickname, false);
-    }
-  }, [code, nickname]);
+    // Always emit join-room on mount — server addPlayer is idempotent,
+    // this ensures socket room membership is current even if the host
+    // navigated here after create-room without an explicit join.
+    joinRoom(code, nickname, false);
+  }, [code]);
 
   if (!roomState) {
     return (
@@ -44,7 +45,6 @@ export default function RoomPage() {
       onAction={sendAction}
       onSitDown={sitDown}
       onLeaveSeat={leaveSeat}
-      onStartGame={startGame}
       onSendChat={sendChat}
       onCucuruchoDecision={sendCucuruchoDecision}
       onRequestRebuy={requestRebuy}

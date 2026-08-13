@@ -59,6 +59,7 @@ export function setupSocketHandlers(io: Server): void {
       if (!session) return;
       session.sitDown(playerId, payload.seatIndex);
       emitRoomState(session.code);
+      if (session.canStart()) session.scheduleStartHand();
     });
 
     socket.on('leave-seat', () => {
@@ -68,13 +69,7 @@ export function setupSocketHandlers(io: Server): void {
       emitRoomState(session.code);
     });
 
-    socket.on('start-game', () => {
-      const session = getRoomByPlayerId(playerId);
-      if (!session || session.hostId !== playerId) return;
-      session.startHand();
-    });
-
-    socket.on('action', (payload: ActionPayload) => {
+socket.on('action', (payload: ActionPayload) => {
       const session = getRoomByPlayerId(playerId);
       if (!session) return;
       session.handleAction(playerId, payload.type, payload.amount);

@@ -24,7 +24,6 @@ interface Props {
   onAction: (type: ActionType, amount?: number) => void;
   onSitDown: (seatIndex: number) => void;
   onLeaveSeat: () => void;
-  onStartGame: () => void;
   onSendChat: (text: string) => void;
   onCucuruchoDecision: (payIn: boolean) => void;
   onRequestRebuy: () => void;
@@ -41,7 +40,7 @@ const phaseColor: Record<string, string> = {
 
 export function PokerTable({
   room, myId, myCards, cucuruchoPayInActive, cucuruchoPayInAmount,
-  onAction, onSitDown, onLeaveSeat, onStartGame, onSendChat, onCucuruchoDecision, onRequestRebuy,
+  onAction, onSitDown, onLeaveSeat, onSendChat, onCucuruchoDecision, onRequestRebuy,
 }: Props) {
   const { players, chatMessages } = room;
   const game = room.game;
@@ -129,11 +128,6 @@ export function PokerTable({
               <span className="sm:hidden">↩</span>
             </button>
           )}
-          {isHost && game.phase === 'waiting' && seated.length >= 2 && (
-            <button onClick={onStartGame} className="text-xs font-black px-3 py-1.5 rounded-lg transition-all shadow-lg" style={{ background: 'linear-gradient(135deg, #16a34a, #15803d)', boxShadow: '0 0 16px rgba(22,163,74,0.4)' }}>
-              ▶ Iniciar
-            </button>
-          )}
           <button onClick={() => setSidebarOpen(o => !o)} className="md:hidden text-gray-500 hover:text-white border border-gray-700 rounded-lg p-1.5 transition-colors">
             💬
           </button>
@@ -157,7 +151,7 @@ export function PokerTable({
                   <div className="text-gray-600 text-xs sm:text-sm text-center px-2 font-medium">
                     {seated.length < 2
                       ? `Aguardando jogadores... (${seated.length}/${room.maxSeats})`
-                      : isHost ? 'Clique em Iniciar para começar' : 'Aguardando o host...'
+                      : 'Iniciando em breve...'
                     }
                   </div>
                 )}
