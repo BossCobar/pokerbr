@@ -18,20 +18,34 @@ export function useGame() {
 
     // On reconnect (new socket.id), re-register with the server so the
     // player remains visible in the room they were in before the disconnect.
-    function handleReconnect() {
+    function rejoinRoom() {
       const { roomCode, nickname } = useGameStore.getState();
       if (roomCode && nickname) {
         socket.emit('join-room', { code: roomCode, nickname, asSpectator: false });
       }
     }
-    socket.on('connect', handleReconnect);
+    socket.on('connect', rejoinRoom);
+
+    // Mobile: when returning from background, socket may have disconnected.
+    // Force reconnect + rejoin when the tab becomes visible again.
+    function handleVisibilityChange() {
+      if (document.visibilityState === 'visible') {
+        if (!socket.connected) {
+          socket.connect();
+        } else {
+          rejoinRoom();
+        }
+      }
+    }
+    document.addEventListener('visibilitychange', handleVisibilityChange);
 
     return () => {
       socket.off('room-state', store.setRoomState);
       socket.off('your-cards', store.setMyCards);
       socket.off('cucurucho-pay-in');
       socket.off('chat-message', store.addChatMessage);
-      socket.off('connect', handleReconnect);
+      socket.off('connect', rejoinRoom);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, []);
 

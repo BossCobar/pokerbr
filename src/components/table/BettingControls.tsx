@@ -31,7 +31,7 @@ export function BettingControls({
 
   const presets = [
     { label: '1/3', value: Math.floor(pot / 3) },
-    { label: '½', value: Math.floor(pot / 2) },
+    { label: '½ Pote', value: Math.floor(pot / 2) },
     { label: 'Pote', value: pot },
   ];
 
@@ -49,7 +49,6 @@ export function BettingControls({
         <div className="flex items-center gap-3">
           <ActionTimer startedAt={turnStartedAt} limitSeconds={turnTimeLimit} />
           <div className="flex-1 h-px bg-white/5" />
-          <span className="text-[10px] text-gray-600 font-medium uppercase tracking-wider">Sua vez</span>
         </div>
       )}
 
@@ -64,6 +63,7 @@ export function BettingControls({
             value={raiseAmt}
             onChange={e => setRaiseAmt(Number(e.target.value))}
             className="flex-1 h-2 accent-yellow-400 cursor-pointer"
+            style={{ touchAction: 'none' }}
           />
           <div className="text-right min-w-[72px]">
             <div className="text-[#c8a84b] font-black text-sm leading-none">{raiseAmt.toLocaleString('pt-BR')}</div>
@@ -93,22 +93,22 @@ export function BettingControls({
         </div>
       </div>
 
-      {/* Action buttons */}
-      <div className="grid grid-cols-4 gap-1.5 sm:gap-2">
+      {/* Action buttons — 2×2 on mobile, 4 columns on desktop */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
         {/* Fold */}
         <button
           onClick={() => act('fold')}
-          className="py-4 sm:py-3.5 rounded-xl font-black text-sm transition-all touch-manipulation active:scale-95 border border-red-900/40"
+          className="py-5 sm:py-4 rounded-2xl font-black text-base sm:text-sm transition-all touch-manipulation active:scale-95 border border-red-900/40"
           style={{ background: 'linear-gradient(135deg, #7f1d1d, #991b1b)', color: '#fca5a5' }}
         >
           Fold
         </button>
 
-        {/* Check / Call */}
+        {/* Check / Call — largest button on mobile */}
         {canCheck ? (
           <button
             onClick={() => act('check')}
-            className="py-4 sm:py-3.5 rounded-xl font-black text-sm transition-all touch-manipulation active:scale-95 border border-white/10"
+            className="py-5 sm:py-4 rounded-2xl font-black text-base sm:text-sm transition-all touch-manipulation active:scale-95 border border-white/10"
             style={{ background: 'linear-gradient(135deg, #1f2937, #374151)', color: '#d1d5db' }}
           >
             Check
@@ -116,29 +116,30 @@ export function BettingControls({
         ) : (
           <button
             onClick={() => act('call')}
-            className="py-4 sm:py-3.5 rounded-xl font-black text-sm transition-all touch-manipulation active:scale-95 border border-blue-700/40 flex flex-col items-center justify-center leading-tight"
+            className="py-5 sm:py-4 rounded-2xl font-black text-base sm:text-sm transition-all touch-manipulation active:scale-95 border border-blue-700/40 flex flex-col items-center justify-center leading-tight"
             style={{ background: 'linear-gradient(135deg, #1d4ed8, #2563eb)', color: '#bfdbfe' }}
           >
             <span className="text-white font-black">Call</span>
-            <span className="text-blue-200 text-xs font-semibold opacity-90">{callAmount.toLocaleString('pt-BR')}</span>
-            {potOdds && <span className="text-blue-300 text-[9px] opacity-60">{potOdds}</span>}
+            <span className="text-blue-200 text-sm font-bold">{callAmount.toLocaleString('pt-BR')}</span>
+            {potOdds && <span className="text-blue-300 text-xs opacity-70">{potOdds}</span>}
           </button>
         )}
 
-        {/* Raise */}
+        {/* Raise — shows amount on mobile */}
         <button
           onClick={() => act('raise', raiseAmt)}
           disabled={!raiseValid}
-          className="py-4 sm:py-3.5 rounded-xl font-black text-sm transition-all touch-manipulation active:scale-95 disabled:opacity-30"
+          className="py-5 sm:py-4 rounded-2xl font-black text-base sm:text-sm transition-all touch-manipulation active:scale-95 disabled:opacity-30 flex flex-col items-center justify-center leading-tight"
           style={{ background: raiseValid ? 'linear-gradient(135deg, #b45309, #c8a84b)' : undefined, color: '#000' }}
         >
-          Raise
+          <span>Raise</span>
+          <span className="text-[11px] font-bold opacity-80">{raiseAmt.toLocaleString('pt-BR')}</span>
         </button>
 
         {/* All-in */}
         <button
           onClick={() => act('allin')}
-          className="py-4 sm:py-3.5 rounded-xl font-black text-sm transition-all touch-manipulation active:scale-95 border border-purple-700/40"
+          className="py-5 sm:py-4 rounded-2xl font-black text-base sm:text-sm transition-all touch-manipulation active:scale-95 border border-purple-700/40"
           style={{ background: 'linear-gradient(135deg, #581c87, #7c3aed)', color: '#e9d5ff' }}
         >
           All-in

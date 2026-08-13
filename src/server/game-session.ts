@@ -88,7 +88,17 @@ export class GameSession extends EventEmitter {
 
   addPlayer(id: string, nickname: string, asSpectator: boolean): Player {
     const existing = this.players.find(p => p.id === id);
-    if (existing) return existing;
+    if (existing) {
+      existing.isConnected = true;
+      return existing;
+    }
+    // Reconnect: same nickname, was disconnected — restore their slot with new socket ID
+    const disconnected = this.players.find(p => !p.isConnected && p.nickname === nickname);
+    if (disconnected) {
+      disconnected.id = id;
+      disconnected.isConnected = true;
+      return disconnected;
+    }
     const player: Player = {
       id, nickname,
       seatIndex: null,
@@ -119,11 +129,11 @@ export class GameSession extends EventEmitter {
   }
 
   removePlayer(playerId: string): void {
-    if (this.game.phase !== 'waiting' && this.game.phase !== 'result') {
-      const player = this.players.find(p => p.id === playerId);
-      if (!player) return;
+    const player = this.players.find(p => p.id === playerId);
+    if (!player) return;
 
-      // Snapshot seated array BEFORE removing this player (indices still valid)
+    if (this.game.phase !== 'waiting' && this.game.phase !== 'result') {
+      // Mid-hand: fold the player and advance if it was their turn
       const seatedBefore = getSeatedPlayers(this.players);
       const disconnectedIdx = seatedBefore.findIndex(p => p.id === playerId);
       const wasCurrentTurn = disconnectedIdx !== -1 && disconnectedIdx === this.game.currentPlayerIndex;
@@ -151,7 +161,6 @@ export class GameSession extends EventEmitter {
           return;
         }
 
-        // Find next active player from disconnected player's old position
         const startIdx = disconnectedIdx % Math.max(seatedNow.length, 1);
         let nextIdx = -1;
         for (let i = 0; i < seatedNow.length; i++) {
@@ -165,12 +174,13 @@ export class GameSession extends EventEmitter {
         return;
       }
 
-      // Not their turn — fix index if disconnected player was before current in seated array
       if (disconnectedIdx !== -1 && disconnectedIdx < this.game.currentPlayerIndex) {
         this.game.currentPlayerIndex = Math.max(0, this.game.currentPlayerIndex - 1);
       }
     } else {
-      this.players = this.players.filter(p => p.id !== playerId);
+      // Between hands: keep the player slot but mark disconnected so they
+      // can reconnect and reclaim their seat by nickname.
+      player.isConnected = false;
     }
   }
 

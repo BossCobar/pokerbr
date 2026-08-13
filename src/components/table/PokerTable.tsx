@@ -119,17 +119,17 @@ export function PokerTable({
         </div>
 
         <div className="flex items-center gap-1.5">
-          <button onClick={() => setSoundOn(s => !s)} className="text-gray-600 hover:text-gray-300 text-base transition-colors p-1" title={soundOn ? 'Som ligado' : 'Mudo'}>
+          <button onClick={() => setSoundOn(s => !s)} className="text-gray-600 hover:text-gray-300 text-base transition-colors p-2 rounded-lg touch-manipulation" title={soundOn ? 'Som ligado' : 'Mudo'}>
             {soundOn ? '🔊' : '🔇'}
           </button>
           {amSeated && (
-            <button onClick={onLeaveSeat} className="text-[10px] sm:text-xs border border-gray-700 hover:border-gray-500 text-gray-500 hover:text-white px-2 py-1.5 rounded-lg transition-colors">
+            <button onClick={onLeaveSeat} className="text-[10px] sm:text-xs border border-gray-700 hover:border-gray-500 text-gray-500 hover:text-white px-2.5 py-2 rounded-lg transition-colors touch-manipulation">
               <span className="hidden sm:inline">Sair do lugar</span>
-              <span className="sm:hidden">↩</span>
+              <span className="sm:hidden text-xs">Sair</span>
             </button>
           )}
-          <button onClick={() => setSidebarOpen(o => !o)} className="md:hidden text-gray-500 hover:text-white border border-gray-700 rounded-lg p-1.5 transition-colors">
-            💬
+          <button onClick={() => setSidebarOpen(o => !o)} className="md:hidden text-gray-400 hover:text-white border border-gray-700 rounded-lg px-2.5 py-2 transition-colors touch-manipulation text-sm font-bold">
+            Chat
           </button>
         </div>
       </div>
