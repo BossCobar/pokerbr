@@ -13,6 +13,7 @@ const openSockets: ClientSocket[] = [];
 
 beforeEach(async () => {
   clearRooms();
+  tokenCounter = 0;
   httpServer = createServer();
   ioServer = new Server(httpServer, { cors: { origin: '*' } });
   setupSocketHandlers(ioServer);
@@ -26,9 +27,15 @@ afterEach(async () => {
   await new Promise<void>(resolve => ioServer.close(() => httpServer.close(() => resolve())));
 });
 
+let tokenCounter = 0;
 function connect(): Promise<ClientSocket> {
   return new Promise((resolve, reject) => {
-    const socket = ioClient(`http://localhost:${port}`, { transports: ['websocket'] });
+    // Each test client gets a unique stable token (simulates different browsers)
+    const token = `test-token-${++tokenCounter}`;
+    const socket = ioClient(`http://localhost:${port}`, {
+      transports: ['websocket'],
+      auth: { token },
+    });
     openSockets.push(socket);
     socket.once('connect', () => resolve(socket));
     socket.once('connect_error', (e) => reject(e));
@@ -70,15 +77,13 @@ async function setupRoom(opts: { seats?: number; bb?: number; chips?: number; mo
   return { p1, code: state.code };
 }
 
-// Sit both players and start a hand, returns preflop state
+// Sit both players; game auto-starts after 2 s debounce
 async function startTwoPlayerGame(p1: ClientSocket, p2: ClientSocket, code: string): Promise<RoomState> {
   p1.emit('sit-down', { seatIndex: 0 });
   await waitFor(p1, 'room-state');
   p2.emit('sit-down', { seatIndex: 1 });
-  await waitFor(p1, 'room-state');
-
-  p1.emit('start-game');
-  return waitForState(p1, s => s.game?.phase === 'preflop');
+  // Auto-start fires 2 s after second player sits; give 8 s total to be safe
+  return waitForState(p1, s => s.game?.phase === 'preflop', 8000);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

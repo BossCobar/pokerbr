@@ -4,7 +4,7 @@ import type { Player } from '@/game/types';
 
 function makePlayer(id: string, chips: number, seatIndex: number): Player {
   return {
-    id, nickname: id, seatIndex, chips, status: 'active',
+    id, token: id, nickname: id, seatIndex, chips, status: 'active',
     bet: 0, totalBet: 0, holeCards: [], isDealer: false, isSB: false, isBB: false,
     isConnected: true,
     stats: { handsPlayed: 0, handsWon: 0, biggestPot: 0, totalWinnings: 0, vpipHands: 0 },

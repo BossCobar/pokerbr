@@ -1,4 +1,5 @@
 import { io, Socket } from 'socket.io-client';
+import { getClientToken } from './clientToken';
 
 let socket: Socket | null = null;
 
@@ -8,6 +9,7 @@ export function getSocket(): Socket {
       (typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000');
     socket = io(url, {
       transports: ['websocket'],
+      auth: { token: getClientToken() },
     });
   }
   return socket;

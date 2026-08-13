@@ -37,7 +37,12 @@ export function createInitialGameState(config: GameConfig): GameState {
 }
 
 export function getSeatedPlayers(players: Player[]): Player[] {
-  return players.filter(p => p.seatIndex !== null && p.status !== 'spectating' && p.status !== 'sitting-out' && p.isConnected);
+  return players.filter(p =>
+    p.seatIndex !== null &&
+    p.status !== 'spectating' &&
+    p.status !== 'sitting-out' &&
+    p.isConnected,
+  );
 }
 
 export function getActivePlayers(players: Player[]): Player[] {
@@ -80,26 +85,99 @@ export function collectBetsIntoPot(players: Player[], pot: number): { players: P
   return { players: reset, pot: pot + collected };
 }
 
+// ADD to existing bet/totalBet (not overwrite) so antes survive into blind posting
 export function postBlinds(players: Player[], sbIndex: number, bbIndex: number, sb: number, bb: number): Player[] {
   return players.map((p, i) => {
     if (i === sbIndex) {
       const amount = Math.min(sb, p.chips);
-      return { ...p, chips: p.chips - amount, bet: amount, totalBet: amount, isSB: true, status: (amount >= p.chips ? 'allin' : p.status) as Player['status'] };
+      const newChips = p.chips - amount;
+      return {
+        ...p,
+        chips: newChips,
+        bet: p.bet + amount,
+        totalBet: p.totalBet + amount,
+        isSB: true,
+        status: (newChips <= 0 ? 'allin' : p.status) as Player['status'],
+      };
     }
     if (i === bbIndex) {
       const amount = Math.min(bb, p.chips);
-      return { ...p, chips: p.chips - amount, bet: amount, totalBet: amount, isBB: true, status: (amount >= p.chips ? 'allin' : p.status) as Player['status'] };
+      const newChips = p.chips - amount;
+      return {
+        ...p,
+        chips: newChips,
+        bet: p.bet + amount,
+        totalBet: p.totalBet + amount,
+        isBB: true,
+        status: (newChips <= 0 ? 'allin' : p.status) as Player['status'],
+      };
     }
     return p;
   });
 }
 
-export function determineWinners(players: Player[], communityCards: CardCode[]): {
-  winnerId: string; winnerNickname: string; potWon: number;
-  handName: string; handCards: CardCode[];
+/**
+ * Compute side pots from totalBet contributions.
+ * Players who folded contribute chips but are not eligible to win.
+ * Returns ordered list from main pot → side pots.
+ */
+export function buildSidePots(players: Player[]): { amount: number; eligiblePlayerIds: string[] }[] {
+  const contributors = players
+    .filter(p => p.totalBet > 0)
+    .map(p => ({
+      id: p.id,
+      totalBet: p.totalBet,
+      canWin: p.status !== 'folded' && p.status !== 'spectating' && p.status !== 'sitting-out',
+    }))
+    .sort((a, b) => a.totalBet - b.totalBet);
+
+  if (contributors.length === 0) return [];
+
+  const pots: { amount: number; eligiblePlayerIds: string[] }[] = [];
+  let prev = 0;
+
+  while (contributors.length > 0) {
+    const level = contributors[0].totalBet;
+    const amtPerPlayer = level - prev;
+    const potAmount = amtPerPlayer * contributors.length;
+    const eligible = contributors.filter(c => c.canWin).map(c => c.id);
+
+    if (potAmount > 0 && eligible.length > 0) {
+      pots.push({ amount: potAmount, eligiblePlayerIds: eligible });
+    }
+
+    prev = level;
+    while (contributors.length > 0 && contributors[0].totalBet === level) {
+      contributors.shift();
+    }
+  }
+
+  return pots;
+}
+
+export interface ShowdownResult {
+  winnerIds: string[];
+  winnerNickname: string;
+  handName: string;
+  handCards: CardCode[];
   allHands: { playerId: string; nickname: string; cards: CardCode[]; handName: string }[];
-} {
-  const contestants = getPlayersStillIn(players);
+}
+
+/**
+ * Determine winner(s) among a specific group of players.
+ * Returns multiple winners when hands are tied.
+ */
+export function determineWinnersForGroup(players: Player[], communityCards: CardCode[]): ShowdownResult {
+  const contestants = players.filter(p => p.status === 'active' || p.status === 'allin');
+
+  if (contestants.length === 0) {
+    return { winnerIds: [], winnerNickname: '', handName: '', handCards: [], allHands: [] };
+  }
+  if (contestants.length === 1) {
+    const p = contestants[0];
+    return { winnerIds: [p.id], winnerNickname: p.nickname, handName: '', handCards: p.holeCards, allHands: [] };
+  }
+
   const evaluated = contestants.map(p => ({
     player: p,
     evaluated: evaluateHand([...p.holeCards, ...communityCards]),
@@ -113,15 +191,32 @@ export function determineWinners(players: Player[], communityCards: CardCode[]):
   }));
 
   const winners = compareHands(evaluated.map(e => e.evaluated));
-  const winnerEntry = evaluated.find(e => winners.includes(e.evaluated))!;
+  const winnerEntries = evaluated.filter(e => winners.includes(e.evaluated));
+  const primary = winnerEntries[0];
 
   return {
-    winnerId: winnerEntry.player.id,
-    winnerNickname: winnerEntry.player.nickname,
-    potWon: 0,
-    handName: getHandName(winnerEntry.evaluated.name),
-    handCards: winnerEntry.player.holeCards,
+    winnerIds: winnerEntries.map(e => e.player.id),
+    winnerNickname: winnerEntries.map(e => e.player.nickname).join(' & '),
+    handName: getHandName(primary.evaluated.name),
+    handCards: primary.player.holeCards,
     allHands,
+  };
+}
+
+// Legacy single-winner interface (kept for HandResult type compatibility)
+export function determineWinners(players: Player[], communityCards: CardCode[]): {
+  winnerId: string; winnerNickname: string; potWon: number;
+  handName: string; handCards: CardCode[];
+  allHands: { playerId: string; nickname: string; cards: CardCode[]; handName: string }[];
+} {
+  const result = determineWinnersForGroup(players, communityCards);
+  return {
+    winnerId: result.winnerIds[0] ?? '',
+    winnerNickname: result.winnerNickname,
+    potWon: 0,
+    handName: result.handName,
+    handCards: result.handCards,
+    allHands: result.allHands,
   };
 }
 

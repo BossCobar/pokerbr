@@ -79,9 +79,11 @@ export function PlayerSeat({ player, seatIndex, totalSeats, myCards, isMyTurn, m
 
   const borderClass = isMyTurn
     ? 'border-[#c8a84b]'
-    : (statusBorder[player.status] ?? 'border-gray-600');
+    : !player.isConnected
+      ? 'border-gray-800'
+      : (statusBorder[player.status] ?? 'border-gray-600');
 
-  const opacity = player.status === 'folded' ? 'opacity-50' : '';
+  const opacity = player.status === 'folded' ? 'opacity-50' : (!player.isConnected ? 'opacity-60' : '');
 
   return (
     <div style={style} className={`z-20 ${opacity}`}>
@@ -154,6 +156,11 @@ export function PlayerSeat({ player, seatIndex, totalSeats, myCards, isMyTurn, m
         {player.status === 'sitting-out' && (
           <div className="text-[8px] sm:text-[9px] font-bold mt-0.5 text-orange-400">
             Sem fichas
+          </div>
+        )}
+        {!player.isConnected && (
+          <div className="text-[8px] sm:text-[9px] font-bold mt-0.5 text-gray-600 uppercase tracking-wide">
+            Offline
           </div>
         )}
 

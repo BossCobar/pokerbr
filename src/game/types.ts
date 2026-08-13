@@ -7,7 +7,8 @@ export type GameMode = 'holdem' | 'cucurucho';
 export type PlayerStatus = 'waiting' | 'active' | 'folded' | 'allin' | 'sitting-out' | 'spectating';
 
 export interface Player {
-  id: string;
+  id: string;    // socket.id — changes on every reconnect
+  token: string; // stable UUID from localStorage — survives reconnects
   nickname: string;
   seatIndex: number | null; // null = spectator
   chips: number;

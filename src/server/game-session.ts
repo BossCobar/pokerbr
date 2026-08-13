@@ -3,7 +3,8 @@ import type { RoomState, RoomConfig, Player, GameState, GameMode, ActionType, Ch
 import {
   createInitialGameState, getSeatedPlayers, postBlinds,
   dealHoleCards, dealCommunityCards, collectBetsIntoPot,
-  determineWinners, getNextActiveIndex, getCallAmount,
+  buildSidePots, determineWinnersForGroup,
+  getNextActiveIndex, getCallAmount,
 } from '@/game/holdem';
 import { createDeck, shuffle } from '@/game/deck';
 import {
@@ -58,7 +59,6 @@ export class GameSession extends EventEmitter {
       hostId: this.hostId,
       players: this.players.map(p => ({
         ...p,
-        // Reveal all hole cards at showdown/result so players can see opponents' hands
         holeCards: revealCards ? p.holeCards : [],
       })),
       game: this.game,
@@ -78,29 +78,40 @@ export class GameSession extends EventEmitter {
     };
   }
 
-  getPlayerCards(playerId: string): string[] {
-    return this.players.find(p => p.id === playerId)?.holeCards ?? [];
+  getPlayerCards(socketId: string): string[] {
+    return this.players.find(p => p.id === socketId)?.holeCards ?? [];
   }
 
-  hasPlayer(playerId: string): boolean {
-    return this.players.some(p => p.id === playerId);
+  hasPlayer(socketId: string): boolean {
+    return this.players.some(p => p.id === socketId);
   }
 
-  addPlayer(id: string, nickname: string, asSpectator: boolean): Player {
-    const existing = this.players.find(p => p.id === id);
-    if (existing) {
-      existing.isConnected = true;
-      return existing;
+  /**
+   * Add or restore a player.
+   * 1. Same socket ID already tracked → just mark connected (idempotent).
+   * 2. Same stable token, currently disconnected → restore seat with new socket ID.
+   * 3. Unknown → create new player.
+   */
+  addPlayer(socketId: string, token: string, nickname: string, asSpectator: boolean): Player {
+    // Already tracked with this exact socket
+    const bySocket = this.players.find(p => p.id === socketId);
+    if (bySocket) {
+      bySocket.isConnected = true;
+      return bySocket;
     }
-    // Reconnect: same nickname, was disconnected — restore their slot with new socket ID
-    const disconnected = this.players.find(p => !p.isConnected && p.nickname === nickname);
-    if (disconnected) {
-      disconnected.id = id;
-      disconnected.isConnected = true;
-      return disconnected;
+
+    // Reconnect: same persistent token with a new socket ID
+    const byToken = this.players.find(p => p.token === token);
+    if (byToken) {
+      byToken.id = socketId;
+      byToken.isConnected = true;
+      return byToken;
     }
+
     const player: Player = {
-      id, nickname,
+      id: socketId,
+      token,
+      nickname,
       seatIndex: null,
       chips: this.game.startingChips,
       status: asSpectator ? 'spectating' : 'waiting',
@@ -113,8 +124,8 @@ export class GameSession extends EventEmitter {
     return player;
   }
 
-  sitDown(playerId: string, seatIndex: number): boolean {
-    const player = this.players.find(p => p.id === playerId);
+  sitDown(socketId: string, seatIndex: number): boolean {
+    const player = this.players.find(p => p.id === socketId);
     if (!player) return false;
     const taken = this.players.some(p => p.seatIndex === seatIndex);
     if (taken || seatIndex >= this.maxSeats) return false;
@@ -123,24 +134,24 @@ export class GameSession extends EventEmitter {
     return true;
   }
 
-  leaveSeat(playerId: string): void {
-    const player = this.players.find(p => p.id === playerId);
+  leaveSeat(socketId: string): void {
+    const player = this.players.find(p => p.id === socketId);
     if (player) { player.seatIndex = null; player.status = 'spectating'; }
   }
 
-  removePlayer(playerId: string): void {
-    const player = this.players.find(p => p.id === playerId);
+  removePlayer(socketId: string): void {
+    const player = this.players.find(p => p.id === socketId);
     if (!player) return;
 
     if (this.game.phase !== 'waiting' && this.game.phase !== 'result') {
-      // Mid-hand: fold the player and advance if it was their turn
+      // Mid-hand: fold and advance if it was their turn
       const seatedBefore = getSeatedPlayers(this.players);
-      const disconnectedIdx = seatedBefore.findIndex(p => p.id === playerId);
+      const disconnectedIdx = seatedBefore.findIndex(p => p.id === socketId);
       const wasCurrentTurn = disconnectedIdx !== -1 && disconnectedIdx === this.game.currentPlayerIndex;
 
       player.isConnected = false;
       player.status = 'folded';
-      this.playersActedThisRound.add(playerId);
+      this.playersActedThisRound.add(socketId);
 
       if (wasCurrentTurn) {
         this.clearTurnTimer();
@@ -178,17 +189,17 @@ export class GameSession extends EventEmitter {
         this.game.currentPlayerIndex = Math.max(0, this.game.currentPlayerIndex - 1);
       }
     } else {
-      // Between hands: keep the player slot but mark disconnected so they
-      // can reconnect and reclaim their seat by nickname.
+      // Between hands: keep the slot for reconnect; mark offline so they're excluded
+      // from getSeatedPlayers and won't block auto-start.
       player.isConnected = false;
     }
   }
 
-  addChatMessage(playerId: string, text: string): ChatMessage {
-    const player = this.players.find(p => p.id === playerId);
+  addChatMessage(socketId: string, text: string): ChatMessage {
+    const player = this.players.find(p => p.id === socketId);
     const msg: ChatMessage = {
       id: Date.now().toString(),
-      playerId,
+      playerId: socketId,
       nickname: player?.nickname ?? 'Anon',
       text: text.slice(0, 200),
       timestamp: Date.now(),
@@ -223,7 +234,9 @@ export class GameSession extends EventEmitter {
       bet: 0, totalBet: 0, holeCards: [],
       isDealer: false, isSB: false, isBB: false,
       lastAction: undefined,
-      status: (p.seatIndex !== null && p.isConnected && p.chips > 0 ? 'active' : p.status) as Player['status'],
+      status: (p.seatIndex !== null && p.isConnected && p.chips > 0 && p.status !== 'sitting-out'
+        ? 'active'
+        : p.status) as Player['status'],
     }));
 
     const seated = getSeatedPlayers(this.players);
@@ -242,29 +255,32 @@ export class GameSession extends EventEmitter {
       bbIdx = (dealerIdx + 2) % seated.length;
     }
 
-    // Preflop: for heads-up, dealer/SB acts first. For 3+, UTG (left of BB) acts first.
     const utg = seated.length === 2 ? dealerIdx : (bbIdx + 1) % seated.length;
-
     seated[dealerIdx].isDealer = true;
 
-    // Cucurucho check
+    // Cucurucho antes go directly into player.bet/totalBet — NOT into game.pot.
+    // collectBetsIntoPot at the end of preflop will pull them all in together.
     if (isCucuruchoHand(this.game)) {
       const anteAmount = this.game.bigBlind * this.config.cucuruchoAnteMultiplier;
-      const { players: withAntes, totalAnte } = applyCucuruchoAntes(seated, anteAmount);
-      withAntes.forEach(p => { const orig = this.players.find(o => o.id === p.id); if (orig) Object.assign(orig, p); });
-      this.game.pot += totalAnte;
+      const { players: withAntes } = applyCucuruchoAntes(seated, anteAmount);
+      withAntes.forEach(p => {
+        const orig = this.players.find(o => o.id === p.id);
+        if (orig) Object.assign(orig, p);
+      });
       this.game.cucuruchoActive = true;
     }
 
-    // Post blinds
+    // postBlinds adds to existing bet/totalBet so antes are preserved
     const withBlinds = postBlinds(seated, sbIdx, bbIdx, this.game.smallBlind, this.game.bigBlind);
-    withBlinds.forEach(p => { const orig = this.players.find(o => o.id === p.id); if (orig) Object.assign(orig, p); });
+    withBlinds.forEach(p => {
+      const orig = this.players.find(o => o.id === p.id);
+      if (orig) Object.assign(orig, p);
+    });
 
     this.currentBet = this.game.bigBlind;
     this.game.currentBet = this.currentBet;
     this.lastRaiseSize = this.game.bigBlind;
 
-    // Deal hole cards
     this.deck = shuffle(createDeck());
     const { players: withCards, deck } = dealHoleCards(this.players, this.deck);
     this.players = withCards;
@@ -277,17 +293,16 @@ export class GameSession extends EventEmitter {
     this.game.turnStartedAt = Date.now();
     this.game.minRaise = this.game.bigBlind * 2;
 
-    // Nobody has voluntarily acted yet (blind posts don't count)
     this.playersActedThisRound = new Set();
 
     this.emit('state-updated');
     this.startTurnTimer();
   }
 
-  handleAction(playerId: string, type: ActionType, amount?: number): void {
+  handleAction(socketId: string, type: ActionType, amount?: number): void {
     const seated = getSeatedPlayers(this.players);
     const currentPlayer = seated[this.game.currentPlayerIndex];
-    if (!currentPlayer || currentPlayer.id !== playerId) return;
+    if (!currentPlayer || currentPlayer.id !== socketId) return;
     if (currentPlayer.status !== 'active') return;
 
     this.clearTurnTimer();
@@ -295,10 +310,10 @@ export class GameSession extends EventEmitter {
     if (type === 'fold') {
       currentPlayer.status = 'folded';
       currentPlayer.lastAction = 'Fold';
-      this.playersActedThisRound.add(playerId);
+      this.playersActedThisRound.add(socketId);
     } else if (type === 'check') {
       currentPlayer.lastAction = 'Check';
-      this.playersActedThisRound.add(playerId);
+      this.playersActedThisRound.add(socketId);
     } else if (type === 'call') {
       const callAmt = getCallAmount(currentPlayer, this.currentBet);
       currentPlayer.chips -= callAmt;
@@ -307,7 +322,7 @@ export class GameSession extends EventEmitter {
       if (currentPlayer.chips === 0) currentPlayer.status = 'allin';
       currentPlayer.lastAction = `Call ${callAmt}`;
       currentPlayer.stats.vpipHands++;
-      this.playersActedThisRound.add(playerId);
+      this.playersActedThisRound.add(socketId);
     } else if (type === 'raise') {
       const raiseTotal = amount ?? this.currentBet + this.lastRaiseSize;
       const diff = raiseTotal - currentPlayer.bet;
@@ -323,8 +338,7 @@ export class GameSession extends EventEmitter {
       this.game.minRaise = this.currentBet + this.lastRaiseSize;
       currentPlayer.lastAction = `Raise ${currentPlayer.bet}`;
       currentPlayer.stats.vpipHands++;
-      // Raise reopens betting: everyone else must act again
-      this.playersActedThisRound = new Set([playerId]);
+      this.playersActedThisRound = new Set([socketId]);
     } else if (type === 'allin') {
       const allInAmt = currentPlayer.chips;
       currentPlayer.bet += allInAmt;
@@ -338,28 +352,25 @@ export class GameSession extends EventEmitter {
         this.game.currentBet = this.currentBet;
         this.lastRaiseSize = Math.max(this.currentBet - prevBet, this.game.bigBlind);
         this.game.minRaise = this.currentBet + this.lastRaiseSize;
-        // All-in raise reopens betting
-        this.playersActedThisRound = new Set([playerId]);
+        this.playersActedThisRound = new Set([socketId]);
       } else {
-        this.playersActedThisRound.add(playerId);
+        this.playersActedThisRound.add(socketId);
       }
     }
 
     this.game.actionHistory.push({
-      playerId, nickname: currentPlayer.nickname, action: type,
+      playerId: socketId, nickname: currentPlayer.nickname, action: type,
       amount: amount ?? 0, street: this.game.street,
     });
 
     const active = seated.filter(p => p.status === 'active');
     const stillIn = seated.filter(p => p.status === 'active' || p.status === 'allin');
 
-    // Hand over if only one player remains
     if (stillIn.length <= 1) {
       this.resolveSingleWinner();
       return;
     }
 
-    // Betting round complete when all active players matched the bet AND all acted
     const allCalled = active.every(p => p.bet >= this.currentBet || p.chips === 0);
     const allActed = active.every(p => this.playersActedThisRound.has(p.id));
 
@@ -368,10 +379,8 @@ export class GameSession extends EventEmitter {
       return;
     }
 
-    // Find next active player
     const nextIdx = getNextActiveIndex(seated, this.game.currentPlayerIndex);
     if (nextIdx === -1) {
-      // All remaining are all-in — advance without more betting
       this.advanceStreet(seated);
       return;
     }
@@ -383,7 +392,6 @@ export class GameSession extends EventEmitter {
   }
 
   private advanceStreet(seated: Player[]): void {
-    // Collect all bets into pot (using this.players to catch all)
     const { players: allReset, pot } = collectBetsIntoPot(this.players, this.game.pot);
     this.players = allReset;
     this.game.pot = pot;
@@ -429,7 +437,6 @@ export class GameSession extends EventEmitter {
     const seatedNow = getSeatedPlayers(this.players);
     const activePlayers = seatedNow.filter(p => p.status === 'active');
 
-    // All remaining players are all-in — run out remaining streets automatically
     if (activePlayers.length === 0) {
       this.emit('state-updated');
       setTimeout(() => this.runOutBoard(), 800);
@@ -466,14 +473,14 @@ export class GameSession extends EventEmitter {
     setTimeout(() => this.runOutBoard(), 800);
   }
 
-  handleCucuruchoPayIn(playerId: string, payIn: boolean): void {
-    const player = this.players.find(p => p.id === playerId);
+  handleCucuruchoPayIn(socketId: string, payIn: boolean): void {
+    const player = this.players.find(p => p.id === socketId);
     if (!player) return;
 
     if (payIn) {
       const amount = Math.min(getCucuruchoPayInAmount(this.game.cucuruchoPotSnapshot), player.chips);
       player.chips -= amount;
-      player.bet += amount;   // tracked as street bet — collected later by collectBetsIntoPot
+      player.bet += amount;
       player.totalBet += amount;
       if (player.chips === 0) player.status = 'allin';
     } else {
@@ -482,11 +489,10 @@ export class GameSession extends EventEmitter {
 
     const seated = getSeatedPlayers(this.players);
     const stillDeciding = seated.filter(p =>
-      p.status === 'active' && p.bet < this.game.cucuruchoPotSnapshot
+      p.status === 'active' && p.bet < this.game.cucuruchoPotSnapshot,
     );
 
     if (stillDeciding.length === 0) {
-      // Collect all cucurucho pay-in bets into pot (no double counting)
       const { players: allReset, pot } = collectBetsIntoPot(this.players, this.game.pot);
       this.players = allReset;
       this.game.pot = pot;
@@ -517,7 +523,7 @@ export class GameSession extends EventEmitter {
     winnerPlayer.stats.totalWinnings += potWon;
     if (potWon > winnerPlayer.stats.biggestPot) winnerPlayer.stats.biggestPot = potWon;
 
-    this.game.pot = 0; // distributed — reset so totals balance
+    this.game.pot = 0;
     this.game.lastResult = {
       winnerId: winner.id, winnerNickname: winner.nickname,
       potWon, handName: '', handCards: [], allHands: [],
@@ -533,19 +539,69 @@ export class GameSession extends EventEmitter {
     this.players = allReset;
     this.game.pot = pot;
 
-    const result = determineWinners(this.players, this.game.communityCards);
-    const potWon = this.game.pot;
-    const winner = this.players.find(p => p.id === result.winnerId)!;
-    winner.chips += potWon;
-    winner.stats.handsWon++;
-    winner.stats.totalWinnings += potWon;
-    if (potWon > winner.stats.biggestPot) winner.stats.biggestPot = potWon;
+    const sidePots = buildSidePots(this.players);
+
+    // Award each pot separately, tracking total winnings per player
+    const winningsMap = new Map<string, number>();
+    let primaryResult = determineWinnersForGroup(
+      this.players.filter(p => p.status === 'active' || p.status === 'allin'),
+      this.game.communityCards,
+    );
+
+    if (sidePots.length > 0) {
+      primaryResult = determineWinnersForGroup(
+        this.players.filter(p => sidePots[0].eligiblePlayerIds.includes(p.id)),
+        this.game.communityCards,
+      );
+
+      for (const sp of sidePots) {
+        const eligible = this.players.filter(p => sp.eligiblePlayerIds.includes(p.id));
+        const result = determineWinnersForGroup(eligible, this.game.communityCards);
+        if (result.winnerIds.length === 0) continue;
+
+        // Split evenly; leftover chip goes to first winner
+        const share = Math.floor(sp.amount / result.winnerIds.length);
+        const remainder = sp.amount - share * result.winnerIds.length;
+        result.winnerIds.forEach((id, i) => {
+          winningsMap.set(id, (winningsMap.get(id) ?? 0) + share + (i === 0 ? remainder : 0));
+        });
+      }
+    } else {
+      // Fallback: no contributors tracked (shouldn't happen), give pot to best hand
+      if (primaryResult.winnerIds.length > 0) {
+        const share = Math.floor(this.game.pot / primaryResult.winnerIds.length);
+        const remainder = this.game.pot - share * primaryResult.winnerIds.length;
+        primaryResult.winnerIds.forEach((id, i) => {
+          winningsMap.set(id, (winningsMap.get(id) ?? 0) + share + (i === 0 ? remainder : 0));
+        });
+      }
+    }
+
+    // Apply winnings
+    let biggestWin = 0;
+    for (const [playerId, amount] of winningsMap) {
+      const p = this.players.find(p => p.id === playerId);
+      if (!p) continue;
+      p.chips += amount;
+      p.stats.handsWon++;
+      p.stats.totalWinnings += amount;
+      if (amount > p.stats.biggestPot) p.stats.biggestPot = amount;
+      if (amount > biggestWin) biggestWin = amount;
+    }
 
     const seated = getSeatedPlayers(this.players);
     seated.forEach(p => { p.stats.handsPlayed++; });
 
-    this.game.pot = 0; // distributed — reset so totals balance
-    this.game.lastResult = { ...result, potWon };
+    this.game.pot = 0;
+    this.game.sidePots = sidePots;
+    this.game.lastResult = {
+      winnerId: primaryResult.winnerIds[0] ?? '',
+      winnerNickname: primaryResult.winnerNickname,
+      potWon: biggestWin,
+      handName: primaryResult.handName,
+      handCards: primaryResult.handCards,
+      allHands: primaryResult.allHands,
+    };
     this.game.phase = 'result';
     this.clearTurnTimer();
     this.emit('state-updated');
@@ -561,10 +617,8 @@ export class GameSession extends EventEmitter {
     this.players = this.players.map(p => {
       if (p.chips <= 0 && p.seatIndex !== null) {
         if (this.config.allowRebuy) {
-          // Rebuy enabled: sit them out so they must manually rebuy
           return { ...p, status: 'sitting-out' as const };
         }
-        // No rebuy: auto-restore chips so game continues
         return { ...p, chips: this.game.startingChips, status: 'waiting' as const };
       }
       return p;
@@ -574,9 +628,9 @@ export class GameSession extends EventEmitter {
     if (this.canStart()) this.scheduleStartHand();
   }
 
-  requestRebuy(playerId: string): boolean {
+  requestRebuy(socketId: string): boolean {
     if (!this.config.allowRebuy) return false;
-    const player = this.players.find(p => p.id === playerId);
+    const player = this.players.find(p => p.id === socketId);
     if (!player) return false;
     if (player.chips > 0 && player.seatIndex !== null) return false;
     player.chips = this.config.rebuyAmount || this.game.startingChips;

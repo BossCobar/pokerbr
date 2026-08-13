@@ -51,11 +51,6 @@ export function useGame() {
 
   const createRoom = useCallback((payload: CreateRoomPayload) => {
     store.setNickname(payload.nickname);
-    // Listen once for the room code so we can set roomCode immediately,
-    // ensuring join-room is always emitted when the room page mounts.
-    socket.once('room-state', (state) => {
-      store.setRoomCode(state.code);
-    });
     socket.emit('create-room', payload);
   }, []);
 
